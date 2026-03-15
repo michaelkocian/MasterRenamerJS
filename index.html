@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Renamer</title>
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/toolbar.css">
+    <link rel="stylesheet" href="css/tree.css">
+    <link rel="stylesheet" href="css/editor.css">
+    <link rel="stylesheet" href="css/dialog.css">
+</head>
+<body>
+    <div id="app">
+        <header id="toolbar" class="toolbar">
+            <div class="toolbar-group">
+                <button id="btn-open-folder" class="toolbar-btn" title="Open Folder">
+                    📂 Open Folder
+                </button>
+                <label class="toolbar-checkbox" title="Show full file paths">
+                    <input type="checkbox" id="chk-full-path">
+                    <span>Full Path</span>
+                </label>
+            </div>
+            <div class="toolbar-group toolbar-regex">
+                <label class="toolbar-label">Find:</label>
+                <input type="text" id="regex-find" class="toolbar-input" placeholder="Regex pattern...">
+                <label class="toolbar-checkbox">
+                    <input type="checkbox" id="chk-regex-mode" checked>
+                    <span>Regex</span>
+                </label>
+                <label class="toolbar-checkbox">
+                    <input type="checkbox" id="chk-case-sensitive">
+                    <span>Aa</span>
+                </label>
+                <label class="toolbar-label">Replace:</label>
+                <input type="text" id="regex-replace" class="toolbar-input" placeholder="Replacement...">
+                <button id="btn-apply-regex" class="toolbar-btn" title="Apply regex rename">
+                    Apply
+                </button>
+                <button id="btn-clear-regex" class="toolbar-btn toolbar-btn-secondary" title="Clear regex">
+                    Clear
+                </button>
+            </div>
+            <div class="toolbar-group">
+                <button id="btn-undo-all" class="toolbar-btn toolbar-btn-secondary" title="Undo all changes">
+                    ↩ Undo All
+                </button>
+                <button id="btn-compare" class="toolbar-btn" title="Compare changes before saving">
+                    🔍 Compare
+                </button>
+                <button id="btn-save" class="toolbar-btn toolbar-btn-primary" title="Save and rename files">
+                    💾 Save
+                </button>
+                <button id="btn-theme" class="toolbar-btn" title="Toggle light/dark mode">
+                    🌙
+                </button>
+            </div>
+        </header>
+
+        <main class="main-layout">
+            <aside id="folder-tree" class="folder-tree-panel">
+                <div class="tree-header">Explorer</div>
+                <div id="tree-container" class="tree-container"></div>
+            </aside>
+
+            <div class="splitter" id="splitter"></div>
+
+            <section id="editor-panel" class="editor-panel">
+                <div class="editor-header">
+                    <span id="editor-file-count" class="editor-file-count"></span>
+                    <span id="editor-selection-info" class="editor-selection-info"></span>
+                </div>
+                <div id="editor-scroll" class="editor-scroll">
+                    <div id="line-numbers" class="line-numbers"></div>
+                    <div id="editor" class="editor" tabindex="0"></div>
+                </div>
+            </section>
+        </main>
+
+        <div id="compare-dialog" class="dialog-overlay hidden">
+            <div class="dialog">
+                <div class="dialog-header">
+                    <h2>Compare Changes</h2>
+                    <label class="toolbar-checkbox">
+                        <input type="checkbox" id="chk-compare-path">
+                        <span>Show Path</span>
+                    </label>
+                    <button id="btn-close-dialog" class="dialog-close" title="Close">✕</button>
+                </div>
+                <div id="compare-content" class="compare-content"></div>
+                <div class="dialog-footer">
+                    <button id="btn-dialog-cancel" class="toolbar-btn toolbar-btn-secondary">Cancel</button>
+                    <button id="btn-dialog-save" class="toolbar-btn toolbar-btn-primary">💾 Save Changes</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="status-bar" class="status-bar">
+            <span id="status-message">Ready — Open a folder to begin</span>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

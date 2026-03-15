@@ -1,0 +1,80 @@
+/* ===== Base Reset & Layout ===== */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-primary);
+    line-height: 1.4;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* ===== Status Bar ===== */
+.status-bar {
+    display: flex;
+    align-items: center;
+    padding: 2px 12px;
+    background: var(--status-bar-bg);
+    color: var(--status-bar-text);
+    font-size: 12px;
+    flex-shrink: 0;
+    height: 24px;
+}
+
+/* ===== Splitter ===== */
+.splitter {
+    width: 4px;
+    cursor: col-resize;
+    background: var(--splitter-color);
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.splitter:hover,
+.splitter.active {
+    background: var(--splitter-hover);
+}

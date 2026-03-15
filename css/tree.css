@@ -1,0 +1,108 @@
+/* ===== Folder Tree Panel ===== */
+.folder-tree-panel {
+    width: 250px;
+    min-width: 150px;
+    background: var(--bg-secondary);
+    border-right: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.tree-header {
+    padding: 8px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+}
+
+.tree-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 0;
+}
+
+/* ===== Tree Node ===== */
+.tree-node {
+    user-select: none;
+}
+
+.tree-node-row {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 13px;
+    height: 24px;
+    transition: background 0.1s;
+}
+
+.tree-node-row:hover {
+    background: var(--bg-hover);
+}
+
+.tree-node-row.selected {
+    background: var(--bg-active);
+}
+
+.tree-node-row.active {
+    background: var(--bg-active);
+}
+
+.tree-indent {
+    display: inline-block;
+    width: 16px;
+    flex-shrink: 0;
+}
+
+.tree-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-secondary);
+    transition: transform 0.15s;
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-toggle.leaf {
+    visibility: hidden;
+}
+
+.tree-icon {
+    margin-right: 4px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tree-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-children {
+    overflow: hidden;
+}
+
+.tree-children.collapsed {
+    display: none;
+}
+
+.tree-node-checkbox {
+    margin-right: 4px;
+    accent-color: var(--border-focus);
+    flex-shrink: 0;
+}

@@ -1,0 +1,88 @@
+/* ===== Theme Variables ===== */
+:root[data-theme="dark"] {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-tertiary: #2d2d2d;
+    --bg-hover: #3c3c3c;
+    --bg-active: #094771;
+    --bg-input: #3c3c3c;
+    --bg-dialog: #2d2d2d;
+    --bg-selection: rgba(38, 79, 120, 0.6);
+    --bg-block-selection: rgba(100, 150, 255, 0.25);
+
+    --text-primary: #cccccc;
+    --text-secondary: #858585;
+    --text-accent: #569cd6;
+    --text-header: #ffffff;
+
+    --border-color: #3c3c3c;
+    --border-focus: #007acc;
+
+    --btn-primary-bg: #0e639c;
+    --btn-primary-hover: #1177bb;
+    --btn-primary-text: #ffffff;
+    --btn-secondary-bg: #3c3c3c;
+    --btn-secondary-hover: #505050;
+
+    --diff-added-bg: rgba(35, 134, 54, 0.3);
+    --diff-added-text: #4ec962;
+    --diff-removed-bg: rgba(218, 54, 51, 0.3);
+    --diff-removed-text: #f97583;
+
+    --line-number-color: #6e7681;
+    --line-number-bg: #1e1e1e;
+
+    --scrollbar-thumb: #424242;
+    --scrollbar-track: #1e1e1e;
+
+    --tree-indent-guide: #3c3c3c;
+    --status-bar-bg: #007acc;
+    --status-bar-text: #ffffff;
+
+    --splitter-color: #3c3c3c;
+    --splitter-hover: #007acc;
+}
+
+:root[data-theme="light"] {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f3f3f3;
+    --bg-tertiary: #ececec;
+    --bg-hover: #e0e0e0;
+    --bg-active: #c4dfe9;
+    --bg-input: #ffffff;
+    --bg-dialog: #ffffff;
+    --bg-selection: rgba(173, 214, 255, 0.6);
+    --bg-block-selection: rgba(100, 150, 255, 0.18);
+
+    --text-primary: #333333;
+    --text-secondary: #767676;
+    --text-accent: #0066b8;
+    --text-header: #000000;
+
+    --border-color: #d4d4d4;
+    --border-focus: #0066b8;
+
+    --btn-primary-bg: #0066b8;
+    --btn-primary-hover: #0078d4;
+    --btn-primary-text: #ffffff;
+    --btn-secondary-bg: #e0e0e0;
+    --btn-secondary-hover: #cccccc;
+
+    --diff-added-bg: rgba(35, 134, 54, 0.15);
+    --diff-added-text: #22863a;
+    --diff-removed-bg: rgba(218, 54, 51, 0.15);
+    --diff-removed-text: #cb2431;
+
+    --line-number-color: #999999;
+    --line-number-bg: #f7f7f7;
+
+    --scrollbar-thumb: #c1c1c1;
+    --scrollbar-track: #f3f3f3;
+
+    --tree-indent-guide: #d4d4d4;
+    --status-bar-bg: #0066b8;
+    --status-bar-text: #ffffff;
+
+    --splitter-color: #d4d4d4;
+    --splitter-hover: #0066b8;
+}
