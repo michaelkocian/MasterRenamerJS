@@ -29,6 +29,8 @@ function createRootNode(name, tree) {
     node.appendChild(row);
 
     const childrenContainer = createChildrenContainer(tree, 1);
+    const infoRow = createFileCountRow(tree.files.length, 1);
+    childrenContainer.insertBefore(infoRow, childrenContainer.firstChild);
     node.appendChild(childrenContainer);
 
     row.addEventListener('click', () => {
@@ -66,12 +68,34 @@ function createTreeRow(label, depth, isFolder, expanded) {
     return row;
 }
 
+function createFileCountRow(count, depth) {
+    const row = document.createElement('div');
+    row.className = 'tree-file-info';
+
+    for (let i = 0; i < depth; i++) {
+        const indent = document.createElement('span');
+        indent.className = 'tree-indent';
+        row.appendChild(indent);
+    }
+
+    // spacer for toggle + icon width
+    const spacer = document.createElement('span');
+    spacer.className = 'tree-indent';
+    row.appendChild(spacer);
+
+    const label = document.createElement('span');
+    label.className = 'tree-file-count-label';
+    label.textContent = `(${count} file${count !== 1 ? 's' : ''})`;
+    row.appendChild(label);
+
+    return row;
+}
+
 function createChildrenContainer(treeNode, depth) {
     const container = document.createElement('div');
     container.className = 'tree-children';
 
     appendFolderChildren(container, treeNode, depth);
-    appendFileChildren(container, treeNode, depth);
 
     return container;
 }
@@ -85,6 +109,8 @@ function appendFolderChildren(container, treeNode, depth) {
         folderNode.appendChild(row);
 
         const childContainer = createChildrenContainer(child, depth + 1);
+        const infoRow = createFileCountRow(child.files.length, depth + 1);
+        childContainer.insertBefore(infoRow, childContainer.firstChild);
         childContainer.classList.add('collapsed');
         folderNode.appendChild(childContainer);
 
@@ -93,18 +119,6 @@ function appendFolderChildren(container, treeNode, depth) {
         });
 
         container.appendChild(folderNode);
-    }
-}
-
-function appendFileChildren(container, treeNode, depth) {
-    for (const file of treeNode.files) {
-        const fileNode = document.createElement('div');
-        fileNode.className = 'tree-node';
-
-        const row = createTreeRow(file.name, depth, false, false);
-        fileNode.appendChild(row);
-
-        container.appendChild(fileNode);
     }
 }
 

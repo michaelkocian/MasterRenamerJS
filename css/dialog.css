@@ -100,7 +100,7 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre;
 }
 
 .compare-arrow {
@@ -116,7 +116,7 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre;
 }
 
 .compare-row.changed .compare-old {

@@ -106,3 +106,19 @@
     accent-color: var(--border-focus);
     flex-shrink: 0;
 }
+
+.tree-file-info {
+    display: flex;
+    align-items: center;
+    padding: 1px 8px;
+    height: 20px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.tree-file-count-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    font-style: italic;
+}

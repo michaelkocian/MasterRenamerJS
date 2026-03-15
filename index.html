@@ -32,12 +32,6 @@
                     <option value="files-and-folders" selected>Files &amp; Folders</option>
                     <option value="recursive">All Recursive</option>
                 </select>
-                <select id="sel-sort-order" class="toolbar-select" title="Sort order">
-                    <option value="name-asc" selected>Name A→Z</option>
-                    <option value="name-desc">Name Z→A</option>
-                    <option value="ext-asc">Extension A→Z</option>
-                    <option value="ext-desc">Extension Z→A</option>
-                </select>
                 <select id="sel-display-mode" class="toolbar-select" title="Change display style">
                     <option value="new">New Name</option>
                     <option value="green">New + Added</option>
@@ -100,6 +94,12 @@
             <section id="editor-panel" class="editor-panel">
                 <div class="editor-header">
                     <span id="editor-file-count" class="editor-file-count"></span>
+                    <select id="sel-sort-order" class="toolbar-select editor-sort-select" title="Sort order">
+                        <option value="name-asc" selected>Name A→Z</option>
+                        <option value="name-desc">Name Z→A</option>
+                        <option value="ext-asc">Extension A→Z</option>
+                        <option value="ext-desc">Extension Z→A</option>
+                    </select>
                     <span id="editor-selection-info" class="editor-selection-info"></span>
                 </div>
                 <div id="editor-scroll" class="editor-scroll">

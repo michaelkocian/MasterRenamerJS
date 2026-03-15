@@ -25,6 +25,12 @@
     content: '📄 ';
 }
 
+.editor-sort-select {
+    margin-left: 8px;
+    font-size: 11px;
+    padding: 1px 4px;
+}
+
 /* ===== Editor Scroll Container ===== */
 .editor-scroll {
     flex: 1;

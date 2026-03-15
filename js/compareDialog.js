@@ -97,10 +97,11 @@ function formatChangeName(change, isOld, pathMode) {
     }
     if (pathMode === 'relative') {
         const { selectedTreeNode } = getState();
+        const fullPath = rebuildPathWithNewName(change.file.path, name);
         if (selectedTreeNode) {
-            const fullPath = rebuildPathWithNewName(change.file.path, name);
             return stripPrefix(fullPath, selectedTreeNode);
         }
+        return fullPath;
     }
     return name;
 }

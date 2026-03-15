@@ -44,10 +44,11 @@ function measureCharWidth() {
         font-family:'Consolas','Courier New',monospace;
         font-size:13px;white-space:pre;
     `;
-    probe.textContent = 'X';
+    const sampleCount = 100;
+    probe.textContent = 'X'.repeat(sampleCount);
     document.body.appendChild(probe);
 
-    const width = probe.offsetWidth;
+    const width = probe.getBoundingClientRect().width / sampleCount;
     getState().charWidth = width;
     document.body.removeChild(probe);
 }
@@ -93,9 +94,12 @@ function formatDisplayName(file, currentName, pathMode, selectedFolder) {
     if (pathMode === 'full') {
         return rebuildPath(file.path, currentName);
     }
-    if (pathMode === 'relative' && selectedFolder) {
+    if (pathMode === 'relative') {
         const fullPath = rebuildPath(file.path, currentName);
-        return stripFolderPrefix(fullPath, selectedFolder);
+        if (selectedFolder) {
+            return stripFolderPrefix(fullPath, selectedFolder);
+        }
+        return fullPath;
     }
     return currentName;
 }
@@ -487,6 +491,14 @@ function selectAll(lines) {
 
 // ===== Text Input =====
 
+function hasBlockWidth() {
+    return selection.active && selection.colSpan > 0;
+}
+
+function hasMultiRowCursor() {
+    return selection.active && selection.rowCount > 1;
+}
+
 function handleInput() {
     const text = hiddenInput.value;
     hiddenInput.value = '';
@@ -495,9 +507,9 @@ function handleInput() {
     const lines = getCurrentDisplayLines();
     if (lines.length === 0) return;
 
-    if (selection.active && !selection.isCollapsed()) {
+    if (hasBlockWidth()) {
         replaceSelectionWithText(lines, text);
-    } else if (selection.active && selection.rowCount > 1) {
+    } else if (hasMultiRowCursor()) {
         insertTextOnMultipleRows(lines, text);
     } else {
         insertTextAtCaret(lines, text);
@@ -517,8 +529,10 @@ function insertTextAtCaret(lines, text) {
 }
 
 function insertTextOnMultipleRows(lines, text) {
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
     const newLines = [...lines];
-    for (let r = selection.minRow; r <= selection.maxRow; r++) {
+    for (let r = savedMinRow; r <= savedMaxRow; r++) {
         const line = newLines[r] || '';
         const padded = line.padEnd(caretCol, ' ');
         newLines[r] = padded.substring(0, caretCol) + text + padded.substring(caretCol);
@@ -526,8 +540,8 @@ function insertTextOnMultipleRows(lines, text) {
 
     applyMultipleLineChanges(newLines);
     caretCol += text.length;
-    selection.begin(selection.minRow, caretCol);
-    selection.moveTo(selection.maxRow, caretCol);
+    selection.begin(savedMinRow, caretCol);
+    selection.moveTo(savedMaxRow, caretCol);
     renderEditor();
 }
 
@@ -556,13 +570,13 @@ function preserveMultiRowCursor(minRow, maxRow, col) {
 // ===== Copy / Cut / Paste =====
 
 function handleCopy(lines) {
-    if (!selection.active || selection.isCollapsed()) return;
+    if (!hasBlockWidth()) return;
     const text = selection.extractTextFromLines(lines);
     writeClipboardText(text);
 }
 
 async function handleCut(lines) {
-    if (!selection.active || selection.isCollapsed()) return;
+    if (!hasBlockWidth()) return;
     const text = selection.extractTextFromLines(lines);
     await writeClipboardText(text);
     deleteSelectedBlock(lines);
@@ -574,9 +588,9 @@ async function handlePaste(lines) {
 
     const clipLines = splitClipboardLines(text);
 
-    if (selection.active && !selection.isCollapsed()) {
+    if (hasBlockWidth()) {
         pasteIntoBlockSelection(lines, clipLines);
-    } else if (selection.active && selection.rowCount > 1) {
+    } else if (hasMultiRowCursor()) {
         pasteOntoMultipleCursors(lines, clipLines);
     } else {
         insertTextAtCaret(lines, clipLines[0] || '');
@@ -619,14 +633,14 @@ function pasteOntoMultipleCursors(lines, clipLines) {
 // ===== Backspace / Delete =====
 
 function handleBackspace(lines) {
-    if (selection.active && !selection.isCollapsed()) {
+    if (hasBlockWidth()) {
         deleteSelectedBlock(lines);
         return;
     }
 
     if (caretCol === 0) return;
 
-    if (selection.active && selection.rowCount > 1) {
+    if (hasMultiRowCursor()) {
         backspaceOnMultipleRows(lines);
         return;
     }
@@ -641,8 +655,10 @@ function handleBackspace(lines) {
 }
 
 function backspaceOnMultipleRows(lines) {
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
     const newLines = [...lines];
-    for (let r = selection.minRow; r <= selection.maxRow; r++) {
+    for (let r = savedMinRow; r <= savedMaxRow; r++) {
         const line = newLines[r] || '';
         if (caretCol > 0 && caretCol <= line.length) {
             newLines[r] = line.substring(0, caretCol - 1) + line.substring(caretCol);
@@ -650,18 +666,18 @@ function backspaceOnMultipleRows(lines) {
     }
     applyMultipleLineChanges(newLines);
     caretCol = Math.max(0, caretCol - 1);
-    selection.begin(selection.minRow, caretCol);
-    selection.moveTo(selection.maxRow, caretCol);
+    selection.begin(savedMinRow, caretCol);
+    selection.moveTo(savedMaxRow, caretCol);
     renderEditor();
 }
 
 function handleDelete(lines) {
-    if (selection.active && !selection.isCollapsed()) {
+    if (hasBlockWidth()) {
         deleteSelectedBlock(lines);
         return;
     }
 
-    if (selection.active && selection.rowCount > 1) {
+    if (hasMultiRowCursor()) {
         deleteOnMultipleRows(lines);
         return;
     }
@@ -676,14 +692,18 @@ function handleDelete(lines) {
 }
 
 function deleteOnMultipleRows(lines) {
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
     const newLines = [...lines];
-    for (let r = selection.minRow; r <= selection.maxRow; r++) {
+    for (let r = savedMinRow; r <= savedMaxRow; r++) {
         const line = newLines[r] || '';
         if (caretCol < line.length) {
             newLines[r] = line.substring(0, caretCol) + line.substring(caretCol + 1);
         }
     }
     applyMultipleLineChanges(newLines);
+    selection.begin(savedMinRow, caretCol);
+    selection.moveTo(savedMaxRow, caretCol);
     renderEditor();
 }
 
@@ -702,7 +722,7 @@ function deleteSelectedBlock(lines) {
 // ===== Apply Changes to State =====
 
 function applyLineChange(displayIndex, newDisplayText) {
-    const { visibleFiles, allFiles, pathMode } = getState();
+    const { visibleFiles, allFiles, pathMode, originalNames } = getState();
     const file = visibleFiles[displayIndex];
     if (!file) return;
 
@@ -713,11 +733,12 @@ function applyLineChange(displayIndex, newDisplayText) {
         ? extractNameFromPath(newDisplayText)
         : newDisplayText;
 
-    updateFileName(globalIndex, rawName.trimEnd());
+    const trimmed = rawName.trimEnd();
+    updateFileName(globalIndex, trimmed || originalNames[globalIndex]);
 }
 
 function applyMultipleLineChanges(newDisplayLines) {
-    const { visibleFiles, allFiles, pathMode } = getState();
+    const { visibleFiles, allFiles, pathMode, originalNames } = getState();
 
     for (let i = 0; i < newDisplayLines.length; i++) {
         const file = visibleFiles[i];
@@ -730,7 +751,8 @@ function applyMultipleLineChanges(newDisplayLines) {
             ? extractNameFromPath(newDisplayLines[i])
             : newDisplayLines[i];
 
-        updateFileName(globalIndex, rawName.trimEnd());
+        const trimmed = rawName.trimEnd();
+        updateFileName(globalIndex, trimmed || originalNames[globalIndex]);
     }
 }
 
