@@ -14,13 +14,25 @@ let regexModeCheckbox = null;
 let caseSensitiveCheckbox = null;
 let searchMatchInfo = null;
 let searchPanel = null;
+// Alt key quick switch for sel-display-mode
+let prevDisplayMode = null;
+let altPressed = false;
+let displayModeSelect = null;
 
 export function initToolbar() {
     cacheElements();
     bindToolbarButtons();
     bindSearchPanel();
     bindSelectors();
+    bindAltDisplayModeSwitch();
 }
+
+function bindAltDisplayModeSwitch() {
+    displayModeSelect = document.getElementById('sel-display-mode');
+    window.addEventListener('keydown', handleAltDisplayModeKeyDown);
+    window.addEventListener('keyup', handleAltDisplayModeKeyUp);
+}
+
 
 function cacheElements() {
     findInput = document.getElementById('regex-find');
@@ -70,6 +82,30 @@ function bindSelectors() {
 }
 
 // ===== Handlers =====
+
+function handleAltDisplayModeKeyDown(e) {
+    if (e.altKey && !altPressed) {
+        e.preventDefault();
+        altPressed = true;
+        prevDisplayMode = displayModeSelect.value;
+        if (prevDisplayMode !== 'old') {
+            displayModeSelect.value = 'old';
+            displayModeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+}
+
+function handleAltDisplayModeKeyUp(e) {
+    if (!e.altKey && altPressed) {
+        e.preventDefault();
+        altPressed = false;
+        if (prevDisplayMode && displayModeSelect.value === 'old') {
+            displayModeSelect.value = prevDisplayMode;
+            displayModeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        prevDisplayMode = null;
+    }
+}
 
 async function handleOpenFolder() {
     setStatusMessage('Opening folder...');
