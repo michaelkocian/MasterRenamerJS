@@ -75,6 +75,8 @@ async function handleOpenFolder() {
     setStatusMessage('Opening folder...');
     const handle = await openFolderPicker();
     if (handle) {
+        const welcomeModal = document.getElementById('welcome-modal');
+        if (welcomeModal) welcomeModal.classList.add('hidden');
         renderTree();
         refilterFiles();
         renderEditor();
