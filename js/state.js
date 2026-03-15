@@ -7,8 +7,9 @@ const state = {
     originalNames: [],
     currentNames: [],
     pathMode: 'name',        // 'full', 'relative', 'name'
-    displayMode: 'green-red', // 'new', 'old', 'green', 'red', 'green-red', 'green-line'
+    displayMode: 'green-line', // 'new', 'old', 'green', 'green-red', 'green-line'
     fileScope: 'recursive',   // 'folder', 'files-and-folders', 'recursive'
+    sortOrder: 'name-asc',     // 'name-asc', 'name-desc', 'ext-asc', 'ext-desc'
     selectedTreeNode: null,
     charWidth: 0,
     listeners: new Map(),
@@ -48,6 +49,11 @@ export function setDisplayMode(mode) {
 export function setFileScope(scope) {
     state.fileScope = scope;
     notifyListeners('file-scope-changed');
+}
+
+export function setSortOrder(order) {
+    state.sortOrder = order;
+    notifyListeners('sort-order-changed');
 }
 
 export function setDirectoryHandle(handle) {

@@ -1,5 +1,5 @@
 // ===== Toolbar Module =====
-import { getState, setPathMode, setDisplayMode, setFileScope, resetAllNames, getChangedFiles } from './state.js';
+import { getState, setPathMode, setDisplayMode, setFileScope, setSortOrder, resetAllNames, getChangedFiles } from './state.js';
 import { openFolderPicker } from './fileSystem.js';
 import { applyRegexRename, isValidRegex } from './regexRename.js';
 import { renderEditor, setSearchHighlight, getSearchMatchCount } from './editor.js';
@@ -65,6 +65,8 @@ function bindSelectors() {
         .addEventListener('change', e => handleDisplayModeChange(e.target.value));
     document.getElementById('sel-file-scope')
         .addEventListener('change', e => handleFileScopeChange(e.target.value));
+    document.getElementById('sel-sort-order')
+        .addEventListener('change', e => handleSortOrderChange(e.target.value));
 }
 
 // ===== Handlers =====
@@ -103,6 +105,12 @@ function handleDisplayModeChange(mode) {
 
 function handleFileScopeChange(scope) {
     setFileScope(scope);
+    refilterFiles();
+    renderEditor();
+}
+
+function handleSortOrderChange(order) {
+    setSortOrder(order);
     refilterFiles();
     renderEditor();
 }

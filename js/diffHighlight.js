@@ -127,7 +127,7 @@ function renderAddedSegment(seg, mode) {
 }
 
 function renderRemovedSegment(seg, mode) {
-    if (mode === 'green-red' || mode === 'red') {
+    if (mode === 'green-red') {
         return `<span class="diff-removed">${escapeHtml(seg.text)}</span>`;
     }
     if (mode === 'green-line') {

@@ -7,6 +7,7 @@ let treeContainer = null;
 export function initFolderTree() {
     treeContainer = document.getElementById('tree-container');
     onStateChange('file-scope-changed', () => refilterFiles());
+    onStateChange('sort-order-changed', () => refilterFiles());
 }
 
 export function renderTree() {
@@ -128,15 +129,17 @@ function clearAllActive() {
 }
 
 export function refilterFiles() {
-    const { allFiles, selectedTreeNode, fileScope } = getState();
+    const { allFiles, selectedTreeNode, fileScope, sortOrder } = getState();
     const folderPath = selectedTreeNode;
 
+    let filtered;
     if (folderPath === null) {
-        setVisibleFiles(allFiles);
-        return;
+        filtered = [...allFiles];
+    } else {
+        filtered = filterByScope(allFiles, folderPath, fileScope);
     }
 
-    const filtered = filterByScope(allFiles, folderPath, fileScope);
+    sortFiles(filtered, sortOrder);
     setVisibleFiles(filtered);
 }
 
@@ -149,12 +152,51 @@ function filterByScope(allFiles, folderPath, scope) {
         return allFiles.filter(f => isDirectChildFile(f, folderPath));
     }
 
-    // files-and-folders: direct children files + all subfolder files grouped
-    return allFiles.filter(f => f.path.startsWith(folderPath + '/'));
+    // files-and-folders: direct children files + direct subfolder virtual entries
+    const directFiles = allFiles.filter(f => isDirectChildFile(f, folderPath));
+    const subfolderNames = new Set();
+    for (const f of allFiles) {
+        if (!f.path.startsWith(folderPath + '/')) continue;
+        const remainder = f.path.substring(folderPath.length + 1);
+        const slashIdx = remainder.indexOf('/');
+        if (slashIdx !== -1) {
+            subfolderNames.add(remainder.substring(0, slashIdx));
+        }
+    }
+    const folderEntries = Array.from(subfolderNames).sort().map(name => ({
+        handle: null,
+        parentHandle: null,
+        name: '\uD83D\uDCC1 ' + name,
+        path: folderPath + '/' + name,
+        isVirtualFolder: true,
+    }));
+    return [...folderEntries, ...directFiles];
 }
 
 function isDirectChildFile(file, folderPath) {
     if (!file.path.startsWith(folderPath + '/')) return false;
     const remainder = file.path.substring(folderPath.length + 1);
     return !remainder.includes('/');
+}
+
+function sortFiles(files, sortOrder) {
+    const getExt = f => {
+        const dot = f.name.lastIndexOf('.');
+        return dot > 0 ? f.name.substring(dot + 1).toLowerCase() : '';
+    };
+
+    switch (sortOrder) {
+        case 'name-desc':
+            files.sort((a, b) => b.name.localeCompare(a.name));
+            break;
+        case 'ext-asc':
+            files.sort((a, b) => getExt(a).localeCompare(getExt(b)) || a.name.localeCompare(b.name));
+            break;
+        case 'ext-desc':
+            files.sort((a, b) => getExt(b).localeCompare(getExt(a)) || a.name.localeCompare(b.name));
+            break;
+        default: // 'name-asc'
+            files.sort((a, b) => a.name.localeCompare(b.name));
+            break;
+    }
 }

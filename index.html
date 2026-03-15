@@ -10,6 +10,10 @@
     <link rel="stylesheet" href="css/tree.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/dialog.css">
+    <!-- Prevent caching -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
 </head>
 <body>
     <div id="app">
@@ -24,22 +28,27 @@
                     <option value="full">Full Path</option>
                 </select>
                 <select id="sel-file-scope" class="toolbar-select" title="Which files to show">
-                    <option value="folder">Folder Files</option>
-                    <option value="files-and-folders">Files &amp; Folders</option>
-                    <option value="recursive" selected>All Recursive</option>
+                    <option value="folder">Files Only</option>
+                    <option value="files-and-folders" selected>Files &amp; Folders</option>
+                    <option value="recursive">All Recursive</option>
+                </select>
+                <select id="sel-sort-order" class="toolbar-select" title="Sort order">
+                    <option value="name-asc" selected>Name A→Z</option>
+                    <option value="name-desc">Name Z→A</option>
+                    <option value="ext-asc">Extension A→Z</option>
+                    <option value="ext-desc">Extension Z→A</option>
                 </select>
                 <select id="sel-display-mode" class="toolbar-select" title="Change display style">
-                    <option value="green-red">Added + Removed</option>
-                    <option value="green">Added Only</option>
-                    <option value="green-line">Added + Delete Line</option>
-                    <option value="red">Removed Only</option>
                     <option value="new">New Name</option>
+                    <option value="green">New + Added</option>
+                    <option value="green-red">New + Changes</option>
+                    <option value="green-line" selected>New + Markers</option>
                     <option value="old">Old Name</option>
                 </select>
             </div>
             <div class="toolbar-group">
                 <button id="btn-search-toggle" class="toolbar-btn" title="Find &amp; Replace">
-                    🔍 Search
+                    🔍 Search &amp; Replace
                 </button>
                 <button id="btn-undo-all" class="toolbar-btn toolbar-btn-secondary" title="Undo all changes">
                     ↩ Undo All
@@ -111,11 +120,10 @@
                             <option value="full">Full Path</option>
                         </select>
                         <select id="sel-compare-display" class="toolbar-select" title="Diff display style">
-                            <option value="green-red">Added + Removed</option>
-                            <option value="green">Added Only</option>
-                            <option value="green-line">Added + Delete Line</option>
-                            <option value="red">Removed Only</option>
                             <option value="new">New Name</option>
+                            <option value="green">New + Added</option>
+                            <option value="green-red">New + Changes</option>
+                            <option value="green-line" selected>New + Markers</option>
                             <option value="old">Old Name</option>
                         </select>
                     </div>

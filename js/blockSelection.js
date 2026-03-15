@@ -114,11 +114,9 @@ function spliceString(str, start, end, insert) {
 
 export function pixelToRowCol(editorEl, x, y, charWidth) {
     const rect = editorEl.getBoundingClientRect();
-    const scrollTop = editorEl.closest('.editor-scroll')?.scrollTop || 0;
-    const scrollLeft = editorEl.closest('.editor-scroll')?.scrollLeft || 0;
 
-    const relativeY = y - rect.top + scrollTop - 4;
-    const relativeX = x - rect.left + scrollLeft - 8;
+    const relativeY = y - rect.top - 4;
+    const relativeX = x - rect.left - 8;
 
     const row = Math.max(0, Math.floor(relativeY / 20));
     const col = Math.max(0, Math.round(relativeX / charWidth));
