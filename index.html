@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/tree.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/dialog.css">
+    <link rel="stylesheet" href="css/toast.css">
     <!-- Prevent caching -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -30,7 +31,7 @@
                 <select id="sel-file-scope" class="toolbar-select" title="Which files to show">
                     <option value="folder">Files Only</option>
                     <option value="files-and-folders" selected>Files &amp; Folders</option>
-                    <option value="recursive">All Recursive</option>
+                    <option value="recursive">Files & All nested files</option>
                 </select>
                 <select id="sel-display-mode" class="toolbar-select" title="Change display style">
                     <option value="new">Disable Highlighting</option>
@@ -156,9 +157,8 @@
             </div>
         </div>
 
-        <div id="status-bar" class="status-bar">
-            <span id="status-message">Ready — Open a folder to begin</span>
-        </div>
+        <!-- Toast notification container -->
+        <div id="toast-container" class="toast-container"></div>
     </div>
 
     <script type="module" src="js/app.js"></script>

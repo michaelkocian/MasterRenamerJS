@@ -1,3 +1,5 @@
+window.showToast = showToast;
+import { showToast } from './toast.js';
 // ===== Application Entry Point =====
 import { initEditor, setupScrollSync } from './editor.js';
 import { initFolderTree } from './folderTree.js';
@@ -32,7 +34,7 @@ function initWelcomeModal() {
             renderTree();
             refilterFiles();
             renderEditor();
-            document.getElementById('status-message').textContent = `Opened: ${handle.name}`;
+            showToast(`Opened: ${handle.name}`);
         }
     });
 }

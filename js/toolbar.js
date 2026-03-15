@@ -108,7 +108,7 @@ function handleAltDisplayModeKeyUp(e) {
 }
 
 async function handleOpenFolder() {
-    setStatusMessage('Opening folder...');
+    showStatusToast('Opening folder...');
     const handle = await openFolderPicker();
     if (handle) {
         const welcomeModal = document.getElementById('welcome-modal');
@@ -116,9 +116,9 @@ async function handleOpenFolder() {
         renderTree();
         refilterFiles();
         renderEditor();
-        setStatusMessage(`Opened: ${handle.name}`);
+        showStatusToast(`Opened: ${handle.name}`);
     } else {
-        setStatusMessage('Ready — Open a folder to begin');
+        showStatusToast('Ready — Open a folder to begin');
     }
 }
 
@@ -209,12 +209,12 @@ function handleApplyRegex() {
 
     const result = applyRegexRename(pattern, replacement, isRegex, caseSensitive);
     if (!result) {
-        setStatusMessage('Invalid regex pattern');
+        showStatusToast('Invalid regex pattern', 3000, 'toast-error');
         return;
     }
 
     applyRegexResults(result);
-    setStatusMessage(`Regex applied: ${result.matchCount} file(s) matched`);
+    showStatusToast(`Regex applied: ${result.matchCount} file(s) matched`);
 }
 
 function applyRegexResults(result) {
@@ -234,21 +234,24 @@ function handleClearSearch() {
 function handleUndoAll() {
     resetAllNames();
     renderEditor();
-    setStatusMessage('All changes undone');
+    showStatusToast('All changes undone');
 }
 
 async function handleSave() {
     const changes = getChangedFiles();
     if (changes.length === 0) {
-        setStatusMessage('No changes to save');
+        showStatusToast('No changes to save', 3000, 'toast-error');
         return;
     }
 
     const duplicates = findDuplicatePaths();
     if (duplicates.length > 0) {
         const names = duplicates.map(d => d.path).join('\n');
-        setStatusMessage(`Blocked: ${duplicates.length} duplicate path(s) detected`);
-        alert(`Cannot save — the following paths would conflict:\n\n${names}`);
+        showStatusToast(
+            `Cannot save — the following paths would conflict:<br><span style='font-size:0.95em;white-space:pre-line;'>${names}</span>`,
+            6000,
+            'toast-error'
+        );
         return;
     }
 
@@ -279,18 +282,20 @@ function findDuplicatePaths() {
 }
 
 async function performSave() {
-    setStatusMessage('Renaming files...');
+    showStatusToast('Renaming files...');
 
     const result = await executeRenames((current, total, change, ok) => {
         const status = ok ? '✓' : '✗';
-        setStatusMessage(`${status} ${current}/${total}: ${change.oldName} → ${change.newName}`);
+        showStatusToast(`${status} ${current}/${total}: ${change.oldName} → ${change.newName}`);
     });
 
     renderEditor();
     const msg = `Done: ${result.success} renamed, ${result.failed} failed`;
-    setStatusMessage(msg);
+    showStatusToast(msg);
 }
-
-function setStatusMessage(msg) {
-    document.getElementById('status-message').textContent = msg;
+function showStatusToast(msg, duration = 3000, className = '') {
+    if (window.showToast) 
+    {
+        window.showToast(msg, duration, className);
+    }
 }
