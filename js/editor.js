@@ -329,7 +329,14 @@ export function getSearchMatchCount() {
 }
 
 function updateStatusInfo(count) {
-    fileCountEl.textContent = `${count} file${count !== 1 ? 's' : ''}`;
+    // Count files and folders
+    const { visibleFiles } = getState();
+    let fileCount = 0, folderCount = 0;
+    for (const f of visibleFiles) {
+        if (f.isVirtualFolder) folderCount++;
+        else fileCount++;
+    }
+    fileCountEl.textContent = `${fileCount} file${fileCount !== 1 ? 's' : ''}, ${folderCount} folder${folderCount !== 1 ? 's' : ''}`;
 
     if (selection.active && !selection.isCollapsed()) {
         const rows = selection.rowCount;

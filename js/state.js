@@ -8,7 +8,7 @@ const state = {
     currentNames: [],
     pathMode: 'name',        // 'full', 'relative', 'name'
     displayMode: 'green-line', // 'new', 'old', 'green', 'green-red', 'green-line'
-    fileScope: 'recursive',   // 'folder', 'files-and-folders', 'recursive'
+    fileScope: 'files-and-folders',   // 'folder', 'files-and-folders', 'recursive'
     sortOrder: 'name-asc',     // 'name-asc', 'name-desc', 'ext-asc', 'ext-desc'
     selectedTreeNode: null,
     charWidth: 0,

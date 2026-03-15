@@ -146,12 +146,7 @@ export function refilterFiles() {
     const { allFiles, selectedTreeNode, fileScope, sortOrder } = getState();
     const folderPath = selectedTreeNode;
 
-    let filtered;
-    if (folderPath === null) {
-        filtered = [...allFiles];
-    } else {
-        filtered = filterByScope(allFiles, folderPath, fileScope);
-    }
+    let filtered = filterByScope(allFiles, folderPath, fileScope);
 
     sortFiles(filtered, sortOrder);
     setVisibleFiles(filtered);
@@ -188,6 +183,10 @@ function filterByScope(allFiles, folderPath, scope) {
 }
 
 function isDirectChildFile(file, folderPath) {
+    if (!folderPath) {
+        // Root: direct child if no slashes in path
+        return !file.path.includes('/');
+    }
     if (!file.path.startsWith(folderPath + '/')) return false;
     const remainder = file.path.substring(folderPath.length + 1);
     return !remainder.includes('/');
