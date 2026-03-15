@@ -68,7 +68,7 @@
 /* ===== Compare Content ===== */
 .compare-content {
     flex: 1;
-    overflow-y: auto;
+    overflow: auto;
     padding: 0;
 }
 
@@ -78,6 +78,7 @@
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 13px;
     line-height: 24px;
+    min-width: fit-content;
 }
 
 .compare-row.unchanged {
@@ -98,9 +99,8 @@
     flex: 1;
     padding: 0 8px;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: pre;
+    flex-shrink: 0;
 }
 
 .compare-arrow {
@@ -114,9 +114,8 @@
     flex: 1;
     padding: 0 8px;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: pre;
+    flex-shrink: 0;
 }
 
 .compare-row.changed .compare-old {

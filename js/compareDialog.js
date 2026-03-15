@@ -67,22 +67,22 @@ function renderChanges() {
         return;
     }
 
-    for (const change of changes) {
-        const row = buildCompareRow(change, pathMode, displayMode);
+    for (let i = 0; i < changes.length; i++) {
+        const row = buildCompareRow(changes[i], i + 1, pathMode, displayMode);
         contentEl.appendChild(row);
     }
 
     summaryEl.textContent = `${changes.length} file${changes.length !== 1 ? 's' : ''} changed`;
 }
 
-function buildCompareRow(change, pathMode, displayMode) {
+function buildCompareRow(change, rowNumber, pathMode, displayMode) {
     const row = document.createElement('div');
     row.className = 'compare-row changed';
 
     const oldDisplay = formatChangeName(change, true, pathMode);
     const newDisplay = formatChangeName(change, false, pathMode);
 
-    row.appendChild(createCell('compare-number', String(change.index + 1)));
+    row.appendChild(createCell('compare-number', String(rowNumber)));
     row.appendChild(createDiffCell('compare-old', oldDisplay, newDisplay, true, displayMode));
     row.appendChild(createCell('compare-arrow', '→'));
     row.appendChild(createDiffCell('compare-new', oldDisplay, newDisplay, false, displayMode));

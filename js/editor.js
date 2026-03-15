@@ -15,6 +15,7 @@ let caretRow = 0;
 let caretCol = 0;
 let isDragging = false;
 let searchPattern = null;
+let lineMappings = [];
 
 export function initEditor() {
     editorEl = document.getElementById('editor');
@@ -74,11 +75,76 @@ function bindStateEvents() {
 // ===== Rendering =====
 
 export function renderEditor() {
+    const scrollEl = document.getElementById('editor-scroll');
+    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
+
     const lines = getCurrentDisplayLines();
+    buildLineMappings(lines);
     renderLineNumbers(lines.length);
     renderEditorLines(lines);
     renderSelectionOverlays();
     updateStatusInfo(lines.length);
+
+    if (scrollEl) {
+        scrollEl.scrollTop = scrollTop;
+        scrollEl.scrollLeft = scrollLeft;
+    }
+}
+
+function buildLineMappings(lines) {
+    const { displayMode } = getState();
+    if (displayMode !== 'green-red') {
+        lineMappings = [];
+        return;
+    }
+    const originals = getOriginalDisplayLines();
+    lineMappings = lines.map((newText, i) => {
+        const oldText = originals[i];
+        if (newText === oldText) return null;
+        const segments = computeCharDiff(oldText, newText);
+        const m2v = [];
+        const v2m = [];
+        let mc = 0, vc = 0;
+        for (const seg of segments) {
+            if (seg.type === 'same' || seg.type === 'added') {
+                for (let c = 0; c < seg.text.length; c++) {
+                    m2v[mc] = vc;
+                    v2m[vc] = mc;
+                    mc++;
+                    vc++;
+                }
+            } else if (seg.type === 'removed') {
+                for (let c = 0; c < seg.text.length; c++) {
+                    v2m[vc] = mc;
+                    vc++;
+                }
+            }
+        }
+        m2v[mc] = vc;
+        v2m[vc] = mc;
+        return { m2v, v2m };
+    });
+}
+
+function modelToVisualCol(row, modelCol) {
+    if (!lineMappings[row]) return modelCol;
+    const m2v = lineMappings[row].m2v;
+    if (modelCol >= m2v.length) {
+        const last = m2v.length - 1;
+        return m2v[last] + (modelCol - last);
+    }
+    return m2v[modelCol];
+}
+
+function visualToModelCol(row, visualCol) {
+    if (!lineMappings[row]) return visualCol;
+    const v2m = lineMappings[row].v2m;
+    if (visualCol >= v2m.length) {
+        const last = v2m.length - 1;
+        return v2m[last] + (visualCol - last);
+    }
+    return v2m[visualCol];
 }
 
 function getCurrentDisplayLines() {
@@ -250,7 +316,10 @@ export function setSearchHighlight(regex) {
 
 export function getSearchMatchCount() {
     if (!searchPattern) return 0;
-    const lines = getCurrentDisplayLines();
+    const { displayMode } = getState();
+    const lines = displayMode === 'old'
+        ? getOriginalDisplayLines()
+        : getCurrentDisplayLines();
     let count = 0;
     for (const line of lines) {
         const matches = line.match(searchPattern);
@@ -288,11 +357,13 @@ function renderSelectionOverlays() {
     const maxCol = selection.maxCol;
 
     for (let r = minRow; r <= maxRow; r++) {
+        const vMinCol = modelToVisualCol(r, minCol);
+        const vMaxCol = modelToVisualCol(r, maxCol);
         const highlight = document.createElement('div');
         highlight.className = 'block-selection-highlight';
         highlight.style.top = `${r * 20 + 4}px`;
-        highlight.style.left = `${minCol * charWidth + 8}px`;
-        highlight.style.width = `${(maxCol - minCol) * charWidth}px`;
+        highlight.style.left = `${vMinCol * charWidth + 8}px`;
+        highlight.style.width = `${(vMaxCol - vMinCol) * charWidth}px`;
         highlight.style.height = '20px';
         editorEl.appendChild(highlight);
     }
@@ -302,10 +373,11 @@ function renderSelectionOverlays() {
 
 function renderCaret() {
     const { charWidth } = getState();
+    const visualCol = modelToVisualCol(caretRow, caretCol);
     const caret = document.createElement('div');
     caret.className = 'editor-caret';
     caret.style.top = `${caretRow * 20 + 4}px`;
-    caret.style.left = `${caretCol * charWidth + 8}px`;
+    caret.style.left = `${visualCol * charWidth + 8}px`;
     editorEl.appendChild(caret);
 }
 
@@ -326,8 +398,9 @@ function handleMouseDown(e) {
 
     const { row, col } = pixelToRowCol(editorEl, e.clientX, e.clientY, getState().charWidth);
     const clampedRow = clampRowIndex(row, lines.length);
+    const modelCol = visualToModelCol(clampedRow, col);
 
-    startBlockSelection(clampedRow, col);
+    startBlockSelection(clampedRow, modelCol);
     isDragging = true;
     renderSelectionOverlays();
     updateStatusInfo(lines.length);
@@ -346,9 +419,11 @@ function handleMouseMove(e) {
     const { row, col } = pixelToRowCol(editorEl, e.clientX, e.clientY, getState().charWidth);
     const clampedRow = clampRowIndex(row, lines.length);
 
-    selection.moveTo(clampedRow, col);
+    const modelCol = visualToModelCol(clampedRow, col);
+
+    selection.moveTo(clampedRow, modelCol);
     caretRow = clampedRow;
-    caretCol = col;
+    caretCol = modelCol;
 
     renderSelectionOverlays();
     updateStatusInfo(lines.length);

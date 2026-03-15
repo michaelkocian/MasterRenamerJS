@@ -38,8 +38,6 @@ function bindToolbarButtons() {
         .addEventListener('click', toggleSearchPanel);
     document.getElementById('btn-undo-all')
         .addEventListener('click', handleUndoAll);
-    document.getElementById('btn-compare')
-        .addEventListener('click', handleCompare);
     document.getElementById('btn-save')
         .addEventListener('click', handleSave);
     document.getElementById('btn-theme')
@@ -48,7 +46,9 @@ function bindToolbarButtons() {
 
 function bindSearchPanel() {
     findInput.addEventListener('input', handleSearchInput);
+    findInput.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
     replaceInput.addEventListener('input', handleSearchInput);
+    replaceInput.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
     regexModeCheckbox.addEventListener('change', handleSearchInput);
     caseSensitiveCheckbox.addEventListener('change', handleSearchInput);
 
@@ -199,22 +199,45 @@ function handleUndoAll() {
     setStatusMessage('All changes undone');
 }
 
-function handleCompare() {
-    const changes = getChangedFiles();
-    if (changes.length === 0) {
-        setStatusMessage('No changes to compare');
-        return;
-    }
-    openCompareDialog(() => performSave());
-}
-
 async function handleSave() {
     const changes = getChangedFiles();
     if (changes.length === 0) {
         setStatusMessage('No changes to save');
         return;
     }
+
+    const duplicates = findDuplicatePaths();
+    if (duplicates.length > 0) {
+        const names = duplicates.map(d => d.path).join('\n');
+        setStatusMessage(`Blocked: ${duplicates.length} duplicate path(s) detected`);
+        alert(`Cannot save — the following paths would conflict:\n\n${names}`);
+        return;
+    }
+
     openCompareDialog(() => performSave());
+}
+
+function findDuplicatePaths() {
+    const state = getState();
+    const seen = new Map();
+    const duplicates = [];
+
+    for (let i = 0; i < state.allFiles.length; i++) {
+        const file = state.allFiles[i];
+        const currentName = state.currentNames[i];
+        const lastSlash = file.path.lastIndexOf('/');
+        const fullPath = lastSlash === -1
+            ? currentName
+            : file.path.substring(0, lastSlash + 1) + currentName;
+
+        if (seen.has(fullPath)) {
+            duplicates.push({ path: fullPath, indices: [seen.get(fullPath), i] });
+        } else {
+            seen.set(fullPath, i);
+        }
+    }
+
+    return duplicates;
 }
 
 async function performSave() {

@@ -47,9 +47,6 @@
                 <button id="btn-undo-all" class="toolbar-btn toolbar-btn-secondary" title="Undo all changes">
                     ↩ Undo All
                 </button>
-                <button id="btn-compare" class="toolbar-btn" title="Compare changes before saving">
-                    📋 Compare
-                </button>
                 <button id="btn-save" class="toolbar-btn toolbar-btn-primary" title="Save and rename files">
                     💾 Save
                 </button>
@@ -62,7 +59,7 @@
         <div id="search-panel" class="search-panel hidden">
             <div class="search-panel-row">
                 <label class="toolbar-label">Find:</label>
-                <input type="text" id="regex-find" class="toolbar-input search-input" placeholder="Search pattern...">
+                <textarea id="regex-find" class="toolbar-input search-input" rows="1" placeholder="Search pattern..."></textarea>
                 <label class="toolbar-checkbox">
                     <input type="checkbox" id="chk-regex-mode" checked>
                     <span>Regex</span>
@@ -72,7 +69,7 @@
                     <span>Aa</span>
                 </label>
                 <label class="toolbar-label">Replace:</label>
-                <input type="text" id="regex-replace" class="toolbar-input search-input" placeholder="Replacement...">
+                <textarea id="regex-replace" class="toolbar-input search-input" rows="1" placeholder="Replacement..."></textarea>
                 <button id="btn-apply-regex" class="toolbar-btn" title="Apply regex rename">
                     Apply
                 </button>
