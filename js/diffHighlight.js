@@ -102,13 +102,38 @@ function mapOpText(op) {
     return op.char;
 }
 
-export function renderDiffHtml(segments) {
-    return segments.map(seg => {
-        if (seg.type === 'same') return escapeHtml(seg.text);
-        if (seg.type === 'added') return `<span class="diff-added">${escapeHtml(seg.text)}</span>`;
-        if (seg.type === 'removed') return `<span class="diff-removed">${escapeHtml(seg.text)}</span>`;
-        return escapeHtml(seg.text);
-    }).join('');
+export function renderDiffHtml(segments, displayMode) {
+    return segments.map(seg => renderSegment(seg, displayMode)).join('');
+}
+
+function renderSegment(seg, mode) {
+    if (seg.type === 'same') return escapeHtml(seg.text);
+
+    if (seg.type === 'added') {
+        return renderAddedSegment(seg, mode);
+    }
+    if (seg.type === 'removed') {
+        return renderRemovedSegment(seg, mode);
+    }
+    return escapeHtml(seg.text);
+}
+
+function renderAddedSegment(seg, mode) {
+    const showAdded = mode === 'green' || mode === 'green-red' || mode === 'green-line';
+    if (showAdded) {
+        return `<span class="diff-added">${escapeHtml(seg.text)}</span>`;
+    }
+    return escapeHtml(seg.text);
+}
+
+function renderRemovedSegment(seg, mode) {
+    if (mode === 'green-red' || mode === 'red') {
+        return `<span class="diff-removed">${escapeHtml(seg.text)}</span>`;
+    }
+    if (mode === 'green-line') {
+        return '<span class="diff-delete-line">&hairsp;</span>';
+    }
+    return '';
 }
 
 function escapeHtml(text) {

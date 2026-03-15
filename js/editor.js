@@ -14,6 +14,7 @@ const selection = new BlockSelection();
 let caretRow = 0;
 let caretCol = 0;
 let isDragging = false;
+let searchPattern = null;
 
 export function initEditor() {
     editorEl = document.getElementById('editor');
@@ -80,12 +81,30 @@ export function renderEditor() {
 }
 
 function getCurrentDisplayLines() {
-    const { visibleFiles, allFiles, currentNames, showFullPath } = getState();
+    const { visibleFiles, allFiles, currentNames, pathMode, selectedTreeNode } = getState();
     return visibleFiles.map(f => {
         const idx = allFiles.indexOf(f);
         const name = currentNames[idx] || f.name;
-        return showFullPath ? rebuildPath(f.path, name) : name;
+        return formatDisplayName(f, name, pathMode, selectedTreeNode);
     });
+}
+
+function formatDisplayName(file, currentName, pathMode, selectedFolder) {
+    if (pathMode === 'full') {
+        return rebuildPath(file.path, currentName);
+    }
+    if (pathMode === 'relative' && selectedFolder) {
+        const fullPath = rebuildPath(file.path, currentName);
+        return stripFolderPrefix(fullPath, selectedFolder);
+    }
+    return currentName;
+}
+
+function stripFolderPrefix(path, folderPath) {
+    if (path.startsWith(folderPath + '/')) {
+        return path.substring(folderPath.length + 1);
+    }
+    return path;
 }
 
 function rebuildPath(originalPath, currentName) {
@@ -95,11 +114,11 @@ function rebuildPath(originalPath, currentName) {
 }
 
 function getOriginalDisplayLines() {
-    const { visibleFiles, allFiles, originalNames, showFullPath } = getState();
+    const { visibleFiles, allFiles, originalNames, pathMode, selectedTreeNode } = getState();
     return visibleFiles.map(f => {
         const idx = allFiles.indexOf(f);
         const name = originalNames[idx] || f.name;
-        return showFullPath ? f.path : name;
+        return formatDisplayName(f, name, pathMode, selectedTreeNode);
     });
 }
 
@@ -141,16 +160,99 @@ function removeExtraLines(lineElements, needed) {
 }
 
 function updateLineContent(lineEl, text, originalText, index) {
+    const { displayMode } = getState();
     const isModified = text !== originalText;
     lineEl.classList.toggle('modified', isModified);
     lineEl.dataset.row = index;
 
-    if (isModified) {
-        const segments = computeCharDiff(originalText, text);
-        lineEl.innerHTML = renderDiffHtml(segments);
+    if (displayMode === 'old') {
+        lineEl.innerHTML = renderWithSearchHighlight(originalText);
+    } else if (displayMode === 'new' || !isModified) {
+        lineEl.innerHTML = renderWithSearchHighlight(text);
     } else {
-        lineEl.textContent = text;
+        const segments = computeCharDiff(originalText, text);
+        const diffHtml = renderDiffHtml(segments, displayMode);
+        lineEl.innerHTML = diffHtml;
+        applySearchHighlightToElement(lineEl);
     }
+}
+
+function renderWithSearchHighlight(text) {
+    if (!searchPattern) return escapeHtml(text);
+
+    let result = '';
+    let lastIndex = 0;
+    const regex = new RegExp(searchPattern.source, searchPattern.flags);
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+        result += escapeHtml(text.substring(lastIndex, match.index));
+        result += `<span class="search-highlight">${escapeHtml(match[0])}</span>`;
+        lastIndex = regex.lastIndex;
+        if (!regex.global) break;
+    }
+
+    result += escapeHtml(text.substring(lastIndex));
+    return result;
+}
+
+function applySearchHighlightToElement(lineEl) {
+    if (!searchPattern) return;
+
+    const walker = document.createTreeWalker(lineEl, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    for (const node of textNodes) {
+        highlightTextNode(node);
+    }
+}
+
+function highlightTextNode(textNode) {
+    const text = textNode.textContent;
+    const regex = new RegExp(searchPattern.source, searchPattern.flags);
+    const match = regex.exec(text);
+    if (!match) return;
+
+    const span = document.createElement('span');
+    span.className = 'search-highlight';
+    span.textContent = match[0];
+
+    const before = text.substring(0, match.index);
+    const after = text.substring(match.index + match[0].length);
+    const parent = textNode.parentNode;
+
+    if (before) parent.insertBefore(document.createTextNode(before), textNode);
+    parent.insertBefore(span, textNode);
+    if (after) {
+        const afterNode = document.createTextNode(after);
+        parent.insertBefore(afterNode, textNode);
+        highlightTextNode(afterNode);
+    }
+    parent.removeChild(textNode);
+}
+
+function escapeHtml(text) {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+export function setSearchHighlight(regex) {
+    searchPattern = regex;
+}
+
+export function getSearchMatchCount() {
+    if (!searchPattern) return 0;
+    const lines = getCurrentDisplayLines();
+    let count = 0;
+    for (const line of lines) {
+        const matches = line.match(searchPattern);
+        if (matches) count += matches.length;
+    }
+    return count;
 }
 
 function updateStatusInfo(count) {
@@ -432,12 +534,23 @@ function insertTextOnMultipleRows(lines, text) {
 function replaceSelectionWithText(lines, text) {
     const textLines = text.split('\n').map(l => l.replace(/\r$/, ''));
     const pasteLines = buildPasteLines(textLines, selection.rowCount);
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
 
     applyBlockReplace(lines, pasteLines);
     caretCol = selection.minCol + (pasteLines[0] || '').length;
-    caretRow = selection.minRow;
-    selection.clear();
+    caretRow = savedMinRow;
+    preserveMultiRowCursor(savedMinRow, savedMaxRow, caretCol);
     renderEditor();
+}
+
+function preserveMultiRowCursor(minRow, maxRow, col) {
+    if (maxRow > minRow) {
+        selection.begin(minRow, col);
+        selection.moveTo(maxRow, col);
+    } else {
+        selection.clear();
+    }
 }
 
 // ===== Copy / Cut / Paste =====
@@ -474,19 +587,24 @@ async function handlePaste(lines) {
 
 function pasteIntoBlockSelection(lines, clipLines) {
     const pasteLines = buildPasteLines(clipLines, selection.rowCount);
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
+
     applyBlockReplace(lines, pasteLines);
     caretCol = selection.minCol + (pasteLines[0] || '').length;
-    caretRow = selection.minRow;
-    selection.clear();
+    caretRow = savedMinRow;
+    preserveMultiRowCursor(savedMinRow, savedMaxRow, caretCol);
 }
 
 function pasteOntoMultipleCursors(lines, clipLines) {
     const rowCount = selection.maxRow - selection.minRow + 1;
     const pasteLines = buildPasteLines(clipLines, rowCount);
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
     const newLines = [...lines];
 
-    for (let r = selection.minRow; r <= selection.maxRow; r++) {
-        const lineIdx = r - selection.minRow;
+    for (let r = savedMinRow; r <= savedMaxRow; r++) {
+        const lineIdx = r - savedMinRow;
         const line = newLines[r] || '';
         const padded = line.padEnd(caretCol, ' ');
         const insert = pasteLines[lineIdx] || '';
@@ -495,6 +613,7 @@ function pasteOntoMultipleCursors(lines, clipLines) {
 
     applyMultipleLineChanges(newLines);
     caretCol += (pasteLines[0] || '').length;
+    preserveMultiRowCursor(savedMinRow, savedMaxRow, caretCol);
 }
 
 // ===== Backspace / Delete =====
@@ -569,25 +688,28 @@ function deleteOnMultipleRows(lines) {
 }
 
 function deleteSelectedBlock(lines) {
+    const savedMinRow = selection.minRow;
+    const savedMaxRow = selection.maxRow;
     const result = selection.deleteTextFromLines(lines);
+
     applyMultipleLineChanges(result);
     caretCol = selection.minCol;
-    caretRow = selection.minRow;
-    selection.clear();
+    caretRow = savedMinRow;
+    preserveMultiRowCursor(savedMinRow, savedMaxRow, caretCol);
     renderEditor();
 }
 
 // ===== Apply Changes to State =====
 
 function applyLineChange(displayIndex, newDisplayText) {
-    const { visibleFiles, allFiles, showFullPath } = getState();
+    const { visibleFiles, allFiles, pathMode } = getState();
     const file = visibleFiles[displayIndex];
     if (!file) return;
 
     const globalIndex = allFiles.indexOf(file);
     if (globalIndex === -1) return;
 
-    const rawName = showFullPath
+    const rawName = (pathMode !== 'name')
         ? extractNameFromPath(newDisplayText)
         : newDisplayText;
 
@@ -595,7 +717,7 @@ function applyLineChange(displayIndex, newDisplayText) {
 }
 
 function applyMultipleLineChanges(newDisplayLines) {
-    const { visibleFiles, allFiles, showFullPath } = getState();
+    const { visibleFiles, allFiles, pathMode } = getState();
 
     for (let i = 0; i < newDisplayLines.length; i++) {
         const file = visibleFiles[i];
@@ -604,7 +726,7 @@ function applyMultipleLineChanges(newDisplayLines) {
         const globalIndex = allFiles.indexOf(file);
         if (globalIndex === -1) continue;
 
-        const rawName = showFullPath
+        const rawName = (pathMode !== 'name')
             ? extractNameFromPath(newDisplayLines[i])
             : newDisplayLines[i];
 

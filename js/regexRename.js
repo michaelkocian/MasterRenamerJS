@@ -2,7 +2,7 @@
 import { getState } from './state.js';
 
 export function applyRegexRename(pattern, replacement, isRegex, caseSensitive) {
-    const { visibleFiles, allFiles, currentNames, showFullPath } = getState();
+    const { visibleFiles, allFiles, currentNames, pathMode } = getState();
     const regex = buildRegex(pattern, isRegex, caseSensitive);
     if (!regex) return null;
 
@@ -14,7 +14,7 @@ export function applyRegexRename(pattern, replacement, isRegex, caseSensitive) {
         if (globalIndex === -1) continue;
 
         const currentName = currentNames[globalIndex];
-        const displayName = showFullPath
+        const displayName = pathMode !== 'name'
             ? rebuildPathDisplay(file.path, currentName)
             : currentName;
 
@@ -22,7 +22,7 @@ export function applyRegexRename(pattern, replacement, isRegex, caseSensitive) {
 
         if (result.changed) {
             updatedNames[globalIndex] = rebuildFullName(
-                file, result.newName, showFullPath
+                file, result.newName, pathMode
             );
             matchCount++;
         }
@@ -63,8 +63,8 @@ function applyReplacement(name, regex, replacement) {
     };
 }
 
-function rebuildFullName(file, newDisplayName, showFullPath) {
-    if (showFullPath) {
+function rebuildFullName(file, newDisplayName, pathMode) {
+    if (pathMode !== 'name') {
         const lastSlash = newDisplayName.lastIndexOf('/');
         return lastSlash >= 0
             ? newDisplayName.substring(lastSlash + 1)

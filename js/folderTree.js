@@ -1,11 +1,12 @@
 // ===== Folder Tree Panel =====
-import { getState, setVisibleFiles, setSelectedTreeNode } from './state.js';
+import { getState, setVisibleFiles, setSelectedTreeNode, onStateChange } from './state.js';
 import { buildFolderTree } from './fileSystem.js';
 
 let treeContainer = null;
 
 export function initFolderTree() {
     treeContainer = document.getElementById('tree-container');
+    onStateChange('file-scope-changed', () => refilterFiles());
 }
 
 export function renderTree() {
@@ -117,7 +118,8 @@ function handleFolderClick(row, childContainer, folderPath) {
     clearAllActive();
     row.classList.add('active');
 
-    filterFilesByFolder(folderPath);
+    setSelectedTreeNode(folderPath);
+    refilterFiles();
 }
 
 function clearAllActive() {
@@ -125,17 +127,34 @@ function clearAllActive() {
         .forEach(r => r.classList.remove('active'));
 }
 
-function filterFilesByFolder(folderPath) {
-    const { allFiles } = getState();
+export function refilterFiles() {
+    const { allFiles, selectedTreeNode, fileScope } = getState();
+    const folderPath = selectedTreeNode;
 
     if (folderPath === null) {
         setVisibleFiles(allFiles);
-        setSelectedTreeNode(null);
-    } else {
-        const filtered = allFiles.filter(f =>
-            f.path.startsWith(folderPath + '/')
-        );
-        setVisibleFiles(filtered);
-        setSelectedTreeNode(folderPath);
+        return;
     }
+
+    const filtered = filterByScope(allFiles, folderPath, fileScope);
+    setVisibleFiles(filtered);
+}
+
+function filterByScope(allFiles, folderPath, scope) {
+    if (scope === 'recursive') {
+        return allFiles.filter(f => f.path.startsWith(folderPath + '/'));
+    }
+
+    if (scope === 'folder') {
+        return allFiles.filter(f => isDirectChildFile(f, folderPath));
+    }
+
+    // files-and-folders: direct children files + all subfolder files grouped
+    return allFiles.filter(f => f.path.startsWith(folderPath + '/'));
+}
+
+function isDirectChildFile(file, folderPath) {
+    if (!file.path.startsWith(folderPath + '/')) return false;
+    const remainder = file.path.substring(folderPath.length + 1);
+    return !remainder.includes('/');
 }

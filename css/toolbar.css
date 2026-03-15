@@ -100,3 +100,55 @@
     color: var(--text-secondary);
     white-space: nowrap;
 }
+
+/* ===== Toolbar Select ===== */
+.toolbar-select {
+    padding: 3px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+.toolbar-select:focus {
+    border-color: var(--border-focus);
+}
+
+.toolbar-select option {
+    background: var(--bg-input);
+    color: var(--text-primary);
+}
+
+/* ===== Search Panel ===== */
+.search-panel {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.search-panel-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.search-input {
+    min-width: 160px;
+    flex: 1;
+    max-width: 280px;
+}
+
+.search-match-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    margin-left: 4px;
+}

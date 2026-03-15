@@ -18,37 +18,34 @@
                 <button id="btn-open-folder" class="toolbar-btn" title="Open Folder">
                     📂 Open Folder
                 </button>
-                <label class="toolbar-checkbox" title="Show full file paths">
-                    <input type="checkbox" id="chk-full-path">
-                    <span>Full Path</span>
-                </label>
-            </div>
-            <div class="toolbar-group toolbar-regex">
-                <label class="toolbar-label">Find:</label>
-                <input type="text" id="regex-find" class="toolbar-input" placeholder="Regex pattern...">
-                <label class="toolbar-checkbox">
-                    <input type="checkbox" id="chk-regex-mode" checked>
-                    <span>Regex</span>
-                </label>
-                <label class="toolbar-checkbox">
-                    <input type="checkbox" id="chk-case-sensitive">
-                    <span>Aa</span>
-                </label>
-                <label class="toolbar-label">Replace:</label>
-                <input type="text" id="regex-replace" class="toolbar-input" placeholder="Replacement...">
-                <button id="btn-apply-regex" class="toolbar-btn" title="Apply regex rename">
-                    Apply
-                </button>
-                <button id="btn-clear-regex" class="toolbar-btn toolbar-btn-secondary" title="Clear regex">
-                    Clear
-                </button>
+                <select id="sel-path-mode" class="toolbar-select" title="Name display mode">
+                    <option value="name">File Name</option>
+                    <option value="relative">Relative Path</option>
+                    <option value="full">Full Path</option>
+                </select>
+                <select id="sel-file-scope" class="toolbar-select" title="Which files to show">
+                    <option value="folder">Folder Files</option>
+                    <option value="files-and-folders">Files &amp; Folders</option>
+                    <option value="recursive" selected>All Recursive</option>
+                </select>
+                <select id="sel-display-mode" class="toolbar-select" title="Change display style">
+                    <option value="green-red">Added + Removed</option>
+                    <option value="green">Added Only</option>
+                    <option value="green-line">Added + Delete Line</option>
+                    <option value="red">Removed Only</option>
+                    <option value="new">New Name</option>
+                    <option value="old">Old Name</option>
+                </select>
             </div>
             <div class="toolbar-group">
+                <button id="btn-search-toggle" class="toolbar-btn" title="Find &amp; Replace">
+                    🔍 Search
+                </button>
                 <button id="btn-undo-all" class="toolbar-btn toolbar-btn-secondary" title="Undo all changes">
                     ↩ Undo All
                 </button>
                 <button id="btn-compare" class="toolbar-btn" title="Compare changes before saving">
-                    🔍 Compare
+                    📋 Compare
                 </button>
                 <button id="btn-save" class="toolbar-btn toolbar-btn-primary" title="Save and rename files">
                     💾 Save
@@ -58,6 +55,30 @@
                 </button>
             </div>
         </header>
+
+        <div id="search-panel" class="search-panel hidden">
+            <div class="search-panel-row">
+                <label class="toolbar-label">Find:</label>
+                <input type="text" id="regex-find" class="toolbar-input search-input" placeholder="Search pattern...">
+                <label class="toolbar-checkbox">
+                    <input type="checkbox" id="chk-regex-mode" checked>
+                    <span>Regex</span>
+                </label>
+                <label class="toolbar-checkbox">
+                    <input type="checkbox" id="chk-case-sensitive">
+                    <span>Aa</span>
+                </label>
+                <label class="toolbar-label">Replace:</label>
+                <input type="text" id="regex-replace" class="toolbar-input search-input" placeholder="Replacement...">
+                <button id="btn-apply-regex" class="toolbar-btn" title="Apply regex rename">
+                    Apply
+                </button>
+                <button id="btn-clear-regex" class="toolbar-btn toolbar-btn-secondary" title="Clear search">
+                    Clear
+                </button>
+                <span id="search-match-info" class="search-match-info"></span>
+            </div>
+        </div>
 
         <main class="main-layout">
             <aside id="folder-tree" class="folder-tree-panel">
@@ -80,17 +101,29 @@
         </main>
 
         <div id="compare-dialog" class="dialog-overlay hidden">
-            <div class="dialog">
+            <div class="dialog dialog-fullscreen">
                 <div class="dialog-header">
                     <h2>Compare Changes</h2>
-                    <label class="toolbar-checkbox">
-                        <input type="checkbox" id="chk-compare-path">
-                        <span>Show Path</span>
-                    </label>
+                    <div class="dialog-settings">
+                        <select id="sel-compare-path" class="toolbar-select" title="Name display in dialog">
+                            <option value="name">File Name</option>
+                            <option value="relative">Relative Path</option>
+                            <option value="full">Full Path</option>
+                        </select>
+                        <select id="sel-compare-display" class="toolbar-select" title="Diff display style">
+                            <option value="green-red">Added + Removed</option>
+                            <option value="green">Added Only</option>
+                            <option value="green-line">Added + Delete Line</option>
+                            <option value="red">Removed Only</option>
+                            <option value="new">New Name</option>
+                            <option value="old">Old Name</option>
+                        </select>
+                    </div>
                     <button id="btn-close-dialog" class="dialog-close" title="Close">✕</button>
                 </div>
                 <div id="compare-content" class="compare-content"></div>
                 <div class="dialog-footer">
+                    <span id="compare-summary" class="compare-summary"></span>
                     <button id="btn-dialog-cancel" class="toolbar-btn toolbar-btn-secondary">Cancel</button>
                     <button id="btn-dialog-save" class="toolbar-btn toolbar-btn-primary">💾 Save Changes</button>
                 </div>

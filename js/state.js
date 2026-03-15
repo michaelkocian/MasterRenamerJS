@@ -6,7 +6,9 @@ const state = {
     visibleFiles: [],
     originalNames: [],
     currentNames: [],
-    showFullPath: false,
+    pathMode: 'name',        // 'full', 'relative', 'name'
+    displayMode: 'green-red', // 'new', 'old', 'green', 'red', 'green-red', 'green-line'
+    fileScope: 'recursive',   // 'folder', 'files-and-folders', 'recursive'
     selectedTreeNode: null,
     charWidth: 0,
     listeners: new Map(),
@@ -33,9 +35,19 @@ export function updateFileName(index, newName) {
     notifyListeners('name-changed', { index, newName });
 }
 
-export function setShowFullPath(value) {
-    state.showFullPath = value;
+export function setPathMode(mode) {
+    state.pathMode = mode;
     notifyListeners('display-mode-changed');
+}
+
+export function setDisplayMode(mode) {
+    state.displayMode = mode;
+    notifyListeners('display-mode-changed');
+}
+
+export function setFileScope(scope) {
+    state.fileScope = scope;
+    notifyListeners('file-scope-changed');
 }
 
 export function setDirectoryHandle(handle) {

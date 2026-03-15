@@ -97,6 +97,20 @@
     opacity: 0.7;
 }
 
+.diff-delete-line {
+    display: inline-block;
+    width: 2px;
+    background: var(--diff-removed-text);
+    opacity: 0.6;
+}
+
+/* ===== Search Highlight ===== */
+.search-highlight {
+    background: rgba(255, 200, 0, 0.35);
+    border-bottom: 2px solid rgba(255, 180, 0, 0.8);
+    border-radius: 1px;
+}
+
 /* ===== Block Selection Overlay ===== */
 .block-selection-highlight {
     position: absolute;
