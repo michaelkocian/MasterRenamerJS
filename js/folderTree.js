@@ -154,6 +154,7 @@ export function refilterFiles() {
 
 function filterByScope(allFiles, folderPath, scope) {
     if (scope === 'recursive') {
+        if (!folderPath) return [...allFiles];
         return allFiles.filter(f => f.path.startsWith(folderPath + '/'));
     }
 
@@ -163,23 +164,36 @@ function filterByScope(allFiles, folderPath, scope) {
 
     // files-and-folders: direct children files + direct subfolder virtual entries
     const directFiles = allFiles.filter(f => isDirectChildFile(f, folderPath));
-    const subfolderNames = new Set();
-    for (const f of allFiles) {
-        if (!f.path.startsWith(folderPath + '/')) continue;
-        const remainder = f.path.substring(folderPath.length + 1);
-        const slashIdx = remainder.indexOf('/');
-        if (slashIdx !== -1) {
-            subfolderNames.add(remainder.substring(0, slashIdx));
-        }
-    }
+    const subfolderNames = getDirectSubfolders(allFiles, folderPath);
+    const prefix = folderPath ? folderPath + '/' : '';
     const folderEntries = Array.from(subfolderNames).sort().map(name => ({
         handle: null,
         parentHandle: null,
         name: '\uD83D\uDCC1 ' + name,
-        path: folderPath + '/' + name,
+        path: prefix + name,
         isVirtualFolder: true,
     }));
     return [...folderEntries, ...directFiles];
+}
+
+export function getDirectSubfolders(allFiles, folderPath) {
+    const subfolderNames = new Set();
+    for (const f of allFiles) {
+        if (folderPath) {
+            if (!f.path.startsWith(folderPath + '/')) continue;
+            const remainder = f.path.substring(folderPath.length + 1);
+            const slashIdx = remainder.indexOf('/');
+            if (slashIdx !== -1) {
+                subfolderNames.add(remainder.substring(0, slashIdx));
+            }
+        } else {
+            const slashIdx = f.path.indexOf('/');
+            if (slashIdx !== -1) {
+                subfolderNames.add(f.path.substring(0, slashIdx));
+            }
+        }
+    }
+    return subfolderNames;
 }
 
 function isDirectChildFile(file, folderPath) {

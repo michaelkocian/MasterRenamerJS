@@ -1,5 +1,6 @@
 // ===== Editor Module =====
 import { getState, updateFileName, onStateChange } from './state.js';
+import { getDirectSubfolders } from './folderTree.js';
 import { BlockSelection, pixelToRowCol } from './blockSelection.js';
 import { readClipboardText, writeClipboardText, splitClipboardLines, buildPasteLines } from './clipboard.js';
 import { computeCharDiff, renderDiffHtml } from './diffHighlight.js';
@@ -330,11 +331,15 @@ export function getSearchMatchCount() {
 
 function updateStatusInfo(count) {
     // Count files and folders
-    const { visibleFiles } = getState();
+    const { visibleFiles, allFiles, selectedTreeNode, fileScope } = getState();
     let fileCount = 0, folderCount = 0;
     for (const f of visibleFiles) {
         if (f.isVirtualFolder) folderCount++;
         else fileCount++;
+    }
+    // In 'folder' (Files Only) mode, compute subfolder count from actual data
+    if (fileScope === 'folder') {
+        folderCount = getDirectSubfolders(allFiles, selectedTreeNode).size;
     }
     fileCountEl.textContent = `${fileCount} file${fileCount !== 1 ? 's' : ''}, ${folderCount} folder${folderCount !== 1 ? 's' : ''}`;
 
