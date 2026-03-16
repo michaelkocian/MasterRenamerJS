@@ -3,7 +3,7 @@ import { getState, setPathMode, setDisplayMode, setFileScope, setSortOrder, rese
 import { openFolderPicker } from './fileSystem.js';
 import { applyRegexRename, isValidRegex } from './regexRename.js';
 import { renderEditor, setSearchHighlight, getSearchMatchCount } from './editor.js';
-import { renderTree, refilterFiles } from './folderTree.js';
+import { refilterFiles } from './folderTree.js';
 import { openCompareDialog } from './compareDialog.js';
 import { executeRenames } from './renamer.js';
 import { toggleTheme } from './theme.js';
@@ -109,17 +109,11 @@ function handleAltDisplayModeKeyUp(e) {
 }
 
 async function handleOpenFolder() {
-    showStatusToast('Opening folder...');
     const handle = await openFolderPicker();
     if (handle) {
         const welcomeModal = document.getElementById('welcome-modal');
         if (welcomeModal) welcomeModal.classList.add('hidden');
-        renderTree();
-        refilterFiles();
-        renderEditor();
-        showStatusToast(`Opened: ${handle.name}`);
-    } else {
-        showStatusToast('Ready — Open a folder to begin');
+        showStatusToast(`Loading: ${handle.name}`);
     }
 }
 

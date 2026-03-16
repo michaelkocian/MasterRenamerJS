@@ -5,6 +5,13 @@
   border-left: 6px solid #e74c3c;
   box-shadow: 0 4px 24px rgba(192,57,43,0.18);
 }
+
+.toast-message.toast-warning {
+  background: #9a6700;
+  color: #fff;
+  border-left: 6px solid #f0b429;
+  box-shadow: 0 4px 24px rgba(154,103,0,0.18);
+}
 /* Toast notification styles */
 .toast-container {
   position: fixed;

@@ -1,46 +1,78 @@
 // ===== File System Access API =====
-import { getState, setFiles, setDirectoryHandle, setVisibleFiles } from './state.js';
+import {
+    appendFiles,
+    beginFolderLoad,
+    finishFolderLoad,
+    getState,
+    setDepthLimitedPaths,
+    updateScanProgress,
+} from './state.js';
+import { reportError, reportWarning } from './errorReporter.js';
+
+const MAX_SCAN_DEPTH = 10;
+const FILE_BATCH_SIZE = 100;
+const ENTRY_PUBLISH_INTERVAL = 150;
+
+let activeScanController = null;
 
 export async function openFolderPicker() {
     try {
-        const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-        setDirectoryHandle(handle);
-        const files = await scanDirectory(handle, '');
-        setFiles(files);
-        setVisibleFiles(files);
+        const handle = await window.showDirectoryPicker({ mode: 'read' });
+
+        if (activeScanController) {
+            cancelFolderLoad();
+        }
+
+        startFolderLoad(handle);
         return handle;
     } catch (err) {
         if (err.name !== 'AbortError') {
-            console.error('Failed to open folder:', err);
+            reportError('Failed to open folder', err);
         }
         return null;
     }
 }
 
-async function scanDirectory(dirHandle, parentPath) {
-    const files = [];
-    const entries = [];
+export function pauseFolderLoad() {
+    if (!activeScanController || activeScanController.cancelled || activeScanController.paused) return false;
 
-    for await (const entry of dirHandle.values()) {
-        entries.push(entry);
-    }
+    activeScanController.paused = true;
+    updateScanProgress({
+        isPaused: true,
+        message: 'Loading paused',
+    });
+    return true;
+}
 
-    entries.sort((a, b) => sortByTypeAndName(a, b));
+export function resumeFolderLoad() {
+    if (!activeScanController || activeScanController.cancelled || !activeScanController.paused) return false;
 
-    for (const entry of entries) {
-        const entryPath = parentPath
-            ? `${parentPath}/${entry.name}`
-            : entry.name;
+    activeScanController.paused = false;
+    releaseScanWaiters(activeScanController);
 
-        if (entry.kind === 'file') {
-            files.push(createFileEntry(entry, dirHandle, entryPath));
-        } else if (entry.kind === 'directory') {
-            const childFiles = await scanDirectory(entry, entryPath);
-            files.push(...childFiles);
-        }
-    }
+    updateScanProgress({
+        isPaused: false,
+        message: `Scanning ${getState().directoryHandle ? getState().directoryHandle.name : 'folder'}...`,
+    });
+    return true;
+}
 
-    return files;
+export function cancelFolderLoad() {
+    if (!activeScanController || activeScanController.cancelled) return false;
+
+    activeScanController.cancelled = true;
+    activeScanController.paused = false;
+    releaseScanWaiters(activeScanController);
+    finishFolderLoad({
+        message: 'Loading stopped - partial results kept',
+        hasPartialResults: getState().allFiles.length > 0,
+    });
+    activeScanController = null;
+    return true;
+}
+
+export function isFolderLoadActive() {
+    return Boolean(activeScanController && !activeScanController.cancelled);
 }
 
 function sortByTypeAndName(a, b) {
@@ -65,7 +97,9 @@ export async function renameFile(fileEntry, newName) {
         const contents = await file.arrayBuffer();
 
         const parentHandle = fileEntry.parentHandle;
+        await ensurePermission(parentHandle, 'readwrite');
         const newHandle = await parentHandle.getFileHandle(newName, { create: true });
+        await ensurePermission(newHandle, 'readwrite');
         const writable = await newHandle.createWritable();
         await writable.write(contents);
         await writable.close();
@@ -80,7 +114,7 @@ export async function renameFile(fileEntry, newName) {
 
         return true;
     } catch (err) {
-        console.error(`Failed to rename "${fileEntry.name}" → "${newName}":`, err);
+        reportError(`Failed to rename ${fileEntry.name} to ${newName}`, err);
         return false;
     }
 }
@@ -94,8 +128,14 @@ function rebuildPath(oldPath, newName) {
 export function buildFolderTree(files) {
     const root = { name: '', children: new Map(), files: [] };
 
+    const { depthLimitedPaths } = getState();
+
     for (const file of files) {
         insertFileIntoTree(root, file);
+    }
+
+    for (const path of depthLimitedPaths) {
+        insertDepthLimitedFolder(root, path);
     }
 
     return root;
@@ -119,4 +159,222 @@ function insertFileIntoTree(root, file) {
     }
 
     current.files.push(file);
+}
+
+function insertDepthLimitedFolder(root, folderPath) {
+    const parts = folderPath.split('/');
+    let current = root;
+
+    for (let i = 0; i < parts.length; i++) {
+        const folderName = parts[i];
+        if (!current.children.has(folderName)) {
+            current.children.set(folderName, {
+                name: folderName,
+                children: new Map(),
+                files: [],
+                path: parts.slice(0, i + 1).join('/'),
+                isDepthLimited: false,
+            });
+        }
+        current = current.children.get(folderName);
+    }
+
+    current.isDepthLimited = true;
+}
+
+function startFolderLoad(handle) {
+    const controller = createScanController();
+    activeScanController = controller;
+    beginFolderLoad(handle, MAX_SCAN_DEPTH);
+    void runFolderScan(handle, controller);
+}
+
+async function runFolderScan(handle, controller) {
+    const batch = [];
+    const depthLimitedPaths = new Set();
+    const progress = {
+        filesLoaded: 0,
+        foldersLoaded: 1,
+        skippedFolders: 0,
+        entriesScanned: 0,
+        depthLimitHit: false,
+        depthLimitCount: 0,
+        currentPath: handle.name,
+        message: `Scanning ${handle.name}...`,
+        isPaused: false,
+    };
+
+    try {
+        await scanDirectory(handle, '', 0, handle, controller, batch, depthLimitedPaths, progress);
+        await publishBatch(batch, depthLimitedPaths, progress, true);
+
+        if (activeScanController !== controller || controller.cancelled) {
+            return;
+        }
+
+        finishFolderLoad({
+            ...progress,
+            message: progress.depthLimitHit
+                ? `Loaded ${progress.filesLoaded} files with depth capped at ${MAX_SCAN_DEPTH}`
+                : `Loaded ${progress.filesLoaded} files`,
+        });
+
+        if (progress.skippedFolders > 0) {
+            reportWarning(
+                `Skipped ${progress.skippedFolders} inaccessible folder${progress.skippedFolders !== 1 ? 's' : ''} while scanning ${handle.name}`,
+                null,
+                { duration: 6500 }
+            );
+        }
+
+        activeScanController = null;
+    } catch (err) {
+        if (controller.cancelled) {
+            return;
+        }
+
+        reportError('Failed to scan folder', err);
+        finishFolderLoad({
+            ...progress,
+            message: 'Loading failed',
+        });
+        activeScanController = null;
+    }
+}
+
+async function scanDirectory(dirHandle, parentPath, depth, parentHandle, controller, batch, depthLimitedPaths, progress) {
+    const entries = await readDirectoryEntries(dirHandle, parentPath, progress);
+    if (!entries) {
+        return;
+    }
+
+    entries.sort((a, b) => sortByTypeAndName(a, b));
+
+    for (const entry of entries) {
+        if (!await waitIfPaused(controller)) {
+            return;
+        }
+
+        if (controller.cancelled) {
+            return;
+        }
+
+        const entryPath = parentPath
+            ? `${parentPath}/${entry.name}`
+            : entry.name;
+
+        progress.currentPath = entryPath;
+        progress.entriesScanned++;
+
+        if (entry.kind === 'file') {
+            batch.push(createFileEntry(entry, parentHandle, entryPath));
+            progress.filesLoaded++;
+        } else if (entry.kind === 'directory') {
+            const nextDepth = depth + 1;
+            if (nextDepth > MAX_SCAN_DEPTH) {
+                depthLimitedPaths.add(entryPath);
+                progress.depthLimitHit = true;
+                progress.depthLimitCount = depthLimitedPaths.size;
+            } else {
+                progress.foldersLoaded++;
+                await scanDirectory(entry, entryPath, nextDepth, entry, controller, batch, depthLimitedPaths, progress);
+                if (controller.cancelled) {
+                    return;
+                }
+            }
+        }
+
+        if (batch.length >= FILE_BATCH_SIZE || progress.entriesScanned % ENTRY_PUBLISH_INTERVAL === 0) {
+            await publishBatch(batch, depthLimitedPaths, progress);
+        }
+    }
+}
+
+async function publishBatch(batch, depthLimitedPaths, progress, force = false) {
+    if (!batch.length && !force) {
+        updateScanProgress(progress);
+        return;
+    }
+
+    const files = batch.splice(0, batch.length);
+    appendFiles(files);
+    setDepthLimitedPaths(Array.from(depthLimitedPaths).sort());
+    updateScanProgress(progress);
+    await yieldToBrowser();
+}
+
+function createScanController() {
+    return {
+        cancelled: false,
+        paused: false,
+        waiters: [],
+    };
+}
+
+function releaseScanWaiters(controller) {
+    const waiters = controller.waiters.splice(0);
+    waiters.forEach(resolve => resolve());
+}
+
+async function waitIfPaused(controller) {
+    while (controller.paused && !controller.cancelled) {
+        await new Promise(resolve => controller.waiters.push(resolve));
+    }
+
+    return !controller.cancelled;
+}
+
+function yieldToBrowser() {
+    return new Promise(resolve => window.setTimeout(resolve, 0));
+}
+
+async function readDirectoryEntries(dirHandle, parentPath, progress) {
+    const entries = [];
+
+    try {
+        for await (const entry of dirHandle.values()) {
+            entries.push(entry);
+        }
+        return entries;
+    } catch (err) {
+        if (!parentPath || !isRecoverableDirectoryAccessError(err)) {
+            throw err;
+        }
+
+        progress.skippedFolders++;
+        progress.message = `Skipped inaccessible folder: ${parentPath}`;
+
+        if (progress.skippedFolders <= 3) {
+            reportWarning(`Skipped inaccessible folder: ${parentPath}`, err);
+        } else if (progress.skippedFolders === 4) {
+            reportWarning('Additional inaccessible folders are being skipped during scan', err);
+        }
+
+        return null;
+    }
+}
+
+function isRecoverableDirectoryAccessError(err) {
+    return [
+        'NoModificationAllowedError',
+        'NotAllowedError',
+        'SecurityError',
+        'InvalidStateError',
+    ].includes(err && err.name);
+}
+
+async function ensurePermission(handle, mode) {
+    if (!handle || !handle.queryPermission || !handle.requestPermission) {
+        return;
+    }
+
+    const permission = await handle.queryPermission({ mode });
+    if (permission === 'granted') {
+        return;
+    }
+
+    const requested = await handle.requestPermission({ mode });
+    if (requested !== 'granted') {
+        throw new DOMException(`Permission ${mode} denied`, 'NotAllowedError');
+    }
 }

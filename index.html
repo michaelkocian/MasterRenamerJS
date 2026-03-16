@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/tree.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/dialog.css">
+    <link rel="stylesheet" href="css/loading.css">
     <link rel="stylesheet" href="css/toast.css">
     <!-- Prevent caching -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -81,9 +82,36 @@
             </div>
         </div>
 
+        <section id="load-status-panel" class="load-status-panel hidden" aria-live="polite">
+            <div class="load-status-main">
+                <div class="load-status-heading">
+                    <span id="load-status-title" class="load-status-title">Loading folder...</span>
+                    <span id="load-status-phase" class="load-status-pill">Loading</span>
+                    <span id="load-status-depth" class="load-status-pill load-status-pill-warning hidden">Depth limit reached</span>
+                </div>
+                <div class="load-status-stats">
+                    <span id="load-status-files">0 files</span>
+                    <span id="load-status-folders">0 folders</span>
+                    <span id="load-status-skipped" class="hidden">0 skipped</span>
+                    <span id="load-status-entries">0 entries scanned</span>
+                    <span id="load-status-rate">0.0 files/s</span>
+                </div>
+                <div id="load-status-message" class="load-status-message">Preparing scan...</div>
+                <div id="load-status-path" class="load-status-path">Waiting for the first entry...</div>
+            </div>
+            <div class="load-status-actions">
+                <button id="btn-load-toggle" class="toolbar-btn toolbar-btn-secondary" type="button">Pause</button>
+                <button id="btn-load-stop" class="toolbar-btn toolbar-btn-secondary" type="button">Stop</button>
+                <button id="btn-load-reselect" class="toolbar-btn" type="button">Pick Different Folder</button>
+            </div>
+        </section>
+
         <main class="main-layout">
             <aside id="folder-tree" class="folder-tree-panel">
-                <div class="tree-header">Explorer</div>
+                <div class="tree-header">
+                    <span>Explorer</span>
+                    <span id="tree-header-status" class="tree-header-status"></span>
+                </div>
                 <div id="tree-container" class="tree-container"></div>
             </aside>
 

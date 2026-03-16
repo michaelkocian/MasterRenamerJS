@@ -3,34 +3,46 @@ import { getState, setVisibleFiles, setSelectedTreeNode, onStateChange } from '.
 import { buildFolderTree } from './fileSystem.js';
 
 let treeContainer = null;
+let treeHeaderStatus = null;
+let expandedNodes = new Set([null]);
 
 export function initFolderTree() {
     treeContainer = document.getElementById('tree-container');
+    treeHeaderStatus = document.getElementById('tree-header-status');
     onStateChange('file-scope-changed', () => refilterFiles());
     onStateChange('sort-order-changed', () => refilterFiles());
+    onStateChange('files-changed', handleFilesChanged);
+    onStateChange('scan-progress', renderTree);
+    onStateChange('tree-selection-changed', renderTree);
 }
 
 export function renderTree() {
-    const { allFiles, directoryHandle } = getState();
+    const { allFiles, directoryHandle, scan } = getState();
     treeContainer.innerHTML = '';
+    updateHeaderStatus(scan);
 
-    if (!allFiles.length) return;
+    if (!directoryHandle) return;
 
     const tree = buildFolderTree(allFiles);
-    const rootNode = createRootNode(directoryHandle.name, tree);
+    const rootNode = createRootNode(directoryHandle.name, tree, scan);
     treeContainer.appendChild(rootNode);
 }
 
-function createRootNode(name, tree) {
+function createRootNode(name, tree, scan) {
     const node = document.createElement('div');
     node.className = 'tree-node';
 
-    const row = createTreeRow(name, 0, true, true);
+    const expanded = expandedNodes.has(null);
+    const row = createTreeRow(name, 0, true, expanded, {
+        badgeText: scan.isLoading ? 'Loading' : '',
+        isActive: getState().selectedTreeNode === null,
+    });
     node.appendChild(row);
 
     const childrenContainer = createChildrenContainer(tree, 1);
     const infoRow = createFileCountRow(tree.files.length, 1);
     childrenContainer.insertBefore(infoRow, childrenContainer.firstChild);
+    childrenContainer.classList.toggle('collapsed', !expanded);
     node.appendChild(childrenContainer);
 
     row.addEventListener('click', () => {
@@ -40,9 +52,10 @@ function createRootNode(name, tree) {
     return node;
 }
 
-function createTreeRow(label, depth, isFolder, expanded) {
+function createTreeRow(label, depth, isFolder, expanded, options = {}) {
     const row = document.createElement('div');
     row.className = 'tree-node-row';
+    row.classList.toggle('active', Boolean(options.isActive));
 
     for (let i = 0; i < depth; i++) {
         const indent = document.createElement('span');
@@ -64,6 +77,13 @@ function createTreeRow(label, depth, isFolder, expanded) {
     labelSpan.className = 'tree-label';
     labelSpan.textContent = label;
     row.appendChild(labelSpan);
+
+    if (options.badgeText) {
+        const badge = document.createElement('span');
+        badge.className = options.badgeClassName || 'tree-node-badge';
+        badge.textContent = options.badgeText;
+        row.appendChild(badge);
+    }
 
     return row;
 }
@@ -105,13 +125,23 @@ function appendFolderChildren(container, treeNode, depth) {
         const folderNode = document.createElement('div');
         folderNode.className = 'tree-node';
 
-        const row = createTreeRow(name, depth, true, false);
+        const expanded = expandedNodes.has(child.path);
+        const row = createTreeRow(name, depth, true, expanded, {
+            badgeText: child.isDepthLimited ? `Max depth ${getState().scan.maxDepth}` : '',
+            badgeClassName: child.isDepthLimited ? 'tree-node-badge tree-node-badge-warning' : 'tree-node-badge',
+            isActive: getState().selectedTreeNode === child.path,
+        });
         folderNode.appendChild(row);
 
         const childContainer = createChildrenContainer(child, depth + 1);
         const infoRow = createFileCountRow(child.files.length, depth + 1);
         childContainer.insertBefore(infoRow, childContainer.firstChild);
-        childContainer.classList.add('collapsed');
+        childContainer.classList.toggle('collapsed', !expanded);
+
+        if (child.isDepthLimited) {
+            childContainer.appendChild(createDepthLimitRow(depth + 1, getState().scan.maxDepth));
+        }
+
         folderNode.appendChild(childContainer);
 
         row.addEventListener('click', () => {
@@ -130,11 +160,78 @@ function handleFolderClick(row, childContainer, folderPath) {
     toggle.classList.toggle('expanded', !isCollapsed);
     icon.textContent = isCollapsed ? '📁' : '📂';
 
+    if (isCollapsed) {
+        expandedNodes.delete(folderPath);
+    } else {
+        expandedNodes.add(folderPath);
+    }
+
     clearAllActive();
     row.classList.add('active');
 
     setSelectedTreeNode(folderPath);
     refilterFiles();
+}
+
+function createDepthLimitRow(depth, maxDepth) {
+    const row = document.createElement('div');
+    row.className = 'tree-file-info tree-file-info-warning';
+
+    for (let i = 0; i < depth; i++) {
+        const indent = document.createElement('span');
+        indent.className = 'tree-indent';
+        row.appendChild(indent);
+    }
+
+    const spacer = document.createElement('span');
+    spacer.className = 'tree-indent';
+    row.appendChild(spacer);
+
+    const label = document.createElement('span');
+    label.className = 'tree-file-count-label';
+    label.textContent = `Nested content hidden after depth ${maxDepth}`;
+    row.appendChild(label);
+
+    return row;
+}
+
+function handleFilesChanged() {
+    const { allFiles } = getState();
+    if (allFiles.length === 0) {
+        expandedNodes = new Set([null]);
+    }
+
+    renderTree();
+    refilterFiles();
+}
+
+function updateHeaderStatus(scan) {
+    if (!treeHeaderStatus) return;
+
+    if (scan.isLoading && scan.isPaused) {
+        treeHeaderStatus.textContent = 'Paused';
+        treeHeaderStatus.className = 'tree-header-status warning';
+        return;
+    }
+
+    if (scan.isLoading) {
+        treeHeaderStatus.textContent = scan.depthLimitHit
+            ? `Loading • depth ${scan.maxDepth}`
+            : 'Loading';
+        treeHeaderStatus.className = scan.depthLimitHit
+            ? 'tree-header-status warning'
+            : 'tree-header-status';
+        return;
+    }
+
+    if (scan.depthLimitHit) {
+        treeHeaderStatus.textContent = `Partial • depth ${scan.maxDepth}`;
+        treeHeaderStatus.className = 'tree-header-status warning';
+        return;
+    }
+
+    treeHeaderStatus.textContent = '';
+    treeHeaderStatus.className = 'tree-header-status';
 }
 
 function clearAllActive() {

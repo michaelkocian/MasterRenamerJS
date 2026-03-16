@@ -4,6 +4,7 @@ const state = {
     directoryHandle: null,
     allFiles: [],
     visibleFiles: [],
+    depthLimitedPaths: [],
     originalNames: [],
     currentNames: [],
     pathMode: 'name',        // 'full', 'relative', 'name'
@@ -15,6 +16,7 @@ const state = {
     listeners: new Map(),
     historyPast: [],
     historyFuture: [],
+    scan: createDefaultScanState(),
 };
 
 export function getState() {
@@ -33,6 +35,68 @@ export function setFiles(files) {
 export function setVisibleFiles(files) {
     state.visibleFiles = files;
     notifyListeners('visible-files-changed');
+}
+
+export function beginFolderLoad(handle, maxDepth) {
+    state.directoryHandle = handle;
+    state.allFiles = [];
+    state.visibleFiles = [];
+    state.depthLimitedPaths = [];
+    state.originalNames = [];
+    state.currentNames = [];
+    state.selectedTreeNode = null;
+    state.historyPast = [];
+    state.historyFuture = [];
+    state.scan = {
+        ...createDefaultScanState(),
+        isLoading: true,
+        rootName: handle.name,
+        maxDepth,
+        foldersLoaded: 1,
+        startedAt: Date.now(),
+        message: `Scanning ${handle.name}...`,
+    };
+
+    notifyListeners('files-changed');
+    notifyListeners('visible-files-changed');
+    notifyListeners('tree-selection-changed');
+    notifyListeners('scan-progress');
+}
+
+export function appendFiles(files) {
+    if (!files.length) return;
+
+    state.allFiles.push(...files);
+    state.originalNames.push(...files.map(file => file.name));
+    state.currentNames.push(...files.map(file => file.name));
+    notifyListeners('files-changed');
+}
+
+export function setDepthLimitedPaths(paths) {
+    state.depthLimitedPaths = [...paths];
+}
+
+export function updateScanProgress(progress) {
+    Object.assign(state.scan, progress);
+
+    const elapsedMs = Math.max(Date.now() - state.scan.startedAt, 1);
+    state.scan.scanRate = state.scan.filesLoaded / (elapsedMs / 1000);
+    state.scan.hasPartialResults = state.allFiles.length > 0;
+
+    notifyListeners('scan-progress');
+}
+
+export function finishFolderLoad(progress = {}) {
+    Object.assign(state.scan, progress, {
+        isLoading: false,
+        isPaused: false,
+        currentPath: '',
+    });
+
+    const elapsedMs = Math.max(Date.now() - state.scan.startedAt, 1);
+    state.scan.scanRate = state.scan.filesLoaded / (elapsedMs / 1000);
+    state.scan.hasPartialResults = state.allFiles.length > 0;
+    notifyListeners('scan-progress');
 }
 
 export function updateFileName(index, newName) {
@@ -172,4 +236,24 @@ function areNameListsEqual(left, right) {
         if (left[i] !== right[i]) return false;
     }
     return true;
+}
+
+function createDefaultScanState() {
+    return {
+        isLoading: false,
+        isPaused: false,
+        hasPartialResults: false,
+        rootName: '',
+        currentPath: '',
+        filesLoaded: 0,
+        foldersLoaded: 0,
+        skippedFolders: 0,
+        entriesScanned: 0,
+        depthLimitHit: false,
+        depthLimitCount: 0,
+        maxDepth: 10,
+        startedAt: 0,
+        scanRate: 0,
+        message: '',
+    };
 }

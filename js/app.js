@@ -1,20 +1,22 @@
 window.showToast = showToast;
 import { showToast } from './toast.js';
 // ===== Application Entry Point =====
+import { installGlobalErrorHandlers } from './errorReporter.js';
 import { initEditor, setupScrollSync } from './editor.js';
 import { initFolderTree } from './folderTree.js';
+import { initLoadingPanel } from './loadingPanel.js';
 import { initToolbar } from './toolbar.js';
 import { initCompareDialog } from './compareDialog.js';
 import { initTheme } from './theme.js';
 import { initSplitter } from './splitter.js';
 import { openFolderPicker } from './fileSystem.js';
-import { renderTree, refilterFiles } from './folderTree.js';
-import { renderEditor } from './editor.js';
 
 function bootstrap() {
+    installGlobalErrorHandlers();
     initTheme();
     initFolderTree();
     initEditor();
+    initLoadingPanel();
     initToolbar();
     initCompareDialog();
     initSplitter();
@@ -31,10 +33,7 @@ function initWelcomeModal() {
         const handle = await openFolderPicker();
         if (handle) {
             modal.classList.add('hidden');
-            renderTree();
-            refilterFiles();
-            renderEditor();
-            showToast(`Opened: ${handle.name}`);
+            showToast(`Loading: ${handle.name}`);
         }
     });
 }

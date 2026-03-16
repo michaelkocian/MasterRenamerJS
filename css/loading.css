@@ -1,0 +1,87 @@
+/* ===== Folder Loading Panel ===== */
+.load-status-panel {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 12px;
+    background:
+        linear-gradient(90deg, rgba(0, 122, 204, 0.12), transparent 35%),
+        var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.load-status-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.load-status-heading,
+.load-status-stats,
+.load-status-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.load-status-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.load-status-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0, 122, 204, 0.18);
+    color: var(--text-accent);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.load-status-pill.is-paused {
+    background: rgba(218, 165, 32, 0.18);
+    color: #d6b35f;
+}
+
+.load-status-pill-warning {
+    background: rgba(255, 166, 0, 0.18);
+    color: #e3b85d;
+}
+
+.load-status-stats,
+.load-status-message,
+.load-status-path {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.load-status-path {
+    color: var(--text-primary);
+    font-family: 'Consolas', 'Courier New', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.load-status-actions {
+    justify-content: flex-end;
+    align-content: flex-start;
+}
+
+@media (max-width: 900px) {
+    .load-status-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .load-status-actions {
+        justify-content: flex-start;
+    }
+}
