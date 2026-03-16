@@ -1,9 +1,10 @@
 // ===== Editor Module =====
-import { getState, updateFileName, onStateChange } from './state.js';
+import { getState, updateFileName, onStateChange, saveHistorySnapshot, undoRenameHistory, redoRenameHistory } from './state.js';
 import { getDirectSubfolders } from './folderTree.js';
 import { BlockSelection, pixelToRowCol } from './blockSelection.js';
 import { readClipboardText, writeClipboardText, splitClipboardLines, buildPasteLines } from './clipboard.js';
 import { computeCharDiff, renderDiffHtml } from './diffHighlight.js';
+import { getRenameDiagnostics } from './renameDiagnostics.js';
 
 let editorEl = null;
 let lineNumbersEl = null;
@@ -81,9 +82,10 @@ export function renderEditor() {
     const scrollLeft = scrollEl ? scrollEl.scrollLeft : 0;
 
     const lines = getCurrentDisplayLines();
+    const diagnostics = getRenameDiagnostics();
     buildLineMappings(lines);
     renderLineNumbers(lines.length);
-    renderEditorLines(lines);
+    renderEditorLines(lines, diagnostics);
     renderSelectionOverlays();
     updateStatusInfo(lines.length);
 
@@ -203,15 +205,19 @@ function renderLineNumbers(count) {
     }
 }
 
-function renderEditorLines(lines) {
+function renderEditorLines(lines, diagnostics) {
     const originals = getOriginalDisplayLines();
     const editorChildren = Array.from(editorEl.querySelectorAll('.editor-line'));
+    const { visibleFiles, allFiles } = getState();
 
     removeExtraLines(editorChildren, lines.length);
     
     for (let i = 0; i < lines.length; i++) {
         const lineEl = editorChildren[i] || createLineElement();
-        updateLineContent(lineEl, lines[i], originals[i], i);
+        const file = visibleFiles[i];
+        const globalIndex = allFiles.indexOf(file);
+        const diagnostic = globalIndex === -1 ? null : diagnostics.byIndex.get(globalIndex);
+        updateLineContent(lineEl, lines[i], originals[i], i, diagnostic, Boolean(file && file.isVirtualFolder));
         if (!lineEl.parentNode || lineEl.parentNode !== editorEl) {
             editorEl.insertBefore(lineEl, hiddenInput);
         }
@@ -230,22 +236,46 @@ function removeExtraLines(lineElements, needed) {
     }
 }
 
-function updateLineContent(lineEl, text, originalText, index) {
+function updateLineContent(lineEl, text, originalText, index, diagnostic, isFolder) {
     const { displayMode } = getState();
     const isModified = text !== originalText;
     lineEl.classList.toggle('modified', isModified);
+    lineEl.classList.toggle('editor-line-folder', isFolder);
+    lineEl.classList.toggle('has-invalid', Boolean(diagnostic && diagnostic.invalid));
+    lineEl.classList.toggle('has-conflict', Boolean(diagnostic && diagnostic.conflict));
     lineEl.dataset.row = index;
+    lineEl.title = diagnostic && diagnostic.problems.length ? diagnostic.problems.join('\n') : '';
+
+    let contentHtml = '';
 
     if (displayMode === 'old') {
-        lineEl.innerHTML = renderWithSearchHighlight(originalText);
+        contentHtml = renderWithSearchHighlight(originalText);
     } else if (displayMode === 'new' || !isModified) {
-        lineEl.innerHTML = renderWithSearchHighlight(text);
+        contentHtml = renderWithSearchHighlight(text);
     } else {
         const segments = computeCharDiff(originalText, text);
-        const diffHtml = renderDiffHtml(segments, displayMode);
-        lineEl.innerHTML = diffHtml;
-        applySearchHighlightToElement(lineEl);
+        contentHtml = renderDiffHtml(segments, displayMode);
     }
+
+    lineEl.innerHTML = `<span class="editor-line-text">${contentHtml}</span>${buildDiagnosticBadges(diagnostic)}`;
+
+    if (displayMode !== 'old' && displayMode !== 'new' && isModified) {
+        applySearchHighlightToElement(lineEl.querySelector('.editor-line-text'));
+    }
+}
+
+function buildDiagnosticBadges(diagnostic) {
+    if (!diagnostic || diagnostic.problems.length === 0) return '';
+
+    const badges = [];
+    if (diagnostic.invalid) {
+        badges.push('<span class="editor-line-badge editor-line-badge-invalid">Invalid</span>');
+    }
+    if (diagnostic.conflict) {
+        badges.push('<span class="editor-line-badge editor-line-badge-conflict">Conflict</span>');
+    }
+
+    return `<span class="editor-line-badges">${badges.join('')}</span>`;
 }
 
 function renderWithSearchHighlight(text) {
@@ -332,6 +362,7 @@ export function getSearchMatchCount() {
 function updateStatusInfo(count) {
     // Count files and folders
     const { visibleFiles, allFiles, selectedTreeNode, fileScope } = getState();
+    const diagnostics = getRenameDiagnostics();
     let fileCount = 0, folderCount = 0;
     for (const f of visibleFiles) {
         if (f.isVirtualFolder) folderCount++;
@@ -343,12 +374,20 @@ function updateStatusInfo(count) {
     }
     fileCountEl.textContent = `${fileCount} file${fileCount !== 1 ? 's' : ''}, ${folderCount} folder${folderCount !== 1 ? 's' : ''}`;
 
+    const visibleIssueCount = visibleFiles.reduce((total, file) => {
+        if (!file || file.isVirtualFolder) return total;
+        const fileIndex = allFiles.indexOf(file);
+        const diagnostic = diagnostics.byIndex.get(fileIndex);
+        return total + (diagnostic && diagnostic.problems.length ? 1 : 0);
+    }, 0);
+
     if (selection.active && !selection.isCollapsed()) {
         const rows = selection.rowCount;
         const cols = selection.colSpan;
         selectionInfoEl.textContent = `Sel: ${rows}×${cols}`;
     } else {
-        selectionInfoEl.textContent = `Ln ${caretRow + 1}, Col ${caretCol + 1}`;
+        const issueText = visibleIssueCount > 0 ? ` · ${visibleIssueCount} issue${visibleIssueCount !== 1 ? 's' : ''}` : '';
+        selectionInfoEl.textContent = `Ln ${caretRow + 1}, Col ${caretCol + 1}${issueText}`;
     }
 }
 
@@ -527,8 +566,18 @@ function handleClipboardKeys(e, lines) {
         handlePaste(lines);
         return true;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
+        if (undoRenameHistory() && window.showToast) {
+            window.showToast('Undo rename change');
+        }
+        return true;
+    }
+    if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')) {
+        e.preventDefault();
+        if (redoRenameHistory() && window.showToast) {
+            window.showToast('Redo rename change');
+        }
         return true;
     }
     return false;
@@ -809,7 +858,7 @@ function deleteSelectedBlock(lines) {
 // ===== Apply Changes to State =====
 
 function applyLineChange(displayIndex, newDisplayText) {
-    const { visibleFiles, allFiles, pathMode, originalNames } = getState();
+    const { visibleFiles, allFiles, pathMode, originalNames, currentNames } = getState();
     const file = visibleFiles[displayIndex];
     if (!file) return;
 
@@ -821,11 +870,16 @@ function applyLineChange(displayIndex, newDisplayText) {
         : newDisplayText;
 
     const trimmed = rawName.trimEnd();
-    updateFileName(globalIndex, trimmed || originalNames[globalIndex]);
+    const nextName = trimmed || originalNames[globalIndex];
+    if (currentNames[globalIndex] === nextName) return;
+
+    saveHistorySnapshot();
+    updateFileName(globalIndex, nextName);
 }
 
 function applyMultipleLineChanges(newDisplayLines) {
-    const { visibleFiles, allFiles, pathMode, originalNames } = getState();
+    const { visibleFiles, allFiles, pathMode, originalNames, currentNames } = getState();
+    const updates = [];
 
     for (let i = 0; i < newDisplayLines.length; i++) {
         const file = visibleFiles[i];
@@ -839,7 +893,17 @@ function applyMultipleLineChanges(newDisplayLines) {
             : newDisplayLines[i];
 
         const trimmed = rawName.trimEnd();
-        updateFileName(globalIndex, trimmed || originalNames[globalIndex]);
+        const nextName = trimmed || originalNames[globalIndex];
+        if (currentNames[globalIndex] !== nextName) {
+            updates.push({ globalIndex, nextName });
+        }
+    }
+
+    if (updates.length === 0) return;
+
+    saveHistorySnapshot();
+    for (const update of updates) {
+        updateFileName(update.globalIndex, update.nextName);
     }
 }
 

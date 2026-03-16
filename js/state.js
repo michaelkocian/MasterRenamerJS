@@ -13,6 +13,8 @@ const state = {
     selectedTreeNode: null,
     charWidth: 0,
     listeners: new Map(),
+    historyPast: [],
+    historyFuture: [],
 };
 
 export function getState() {
@@ -23,6 +25,8 @@ export function setFiles(files) {
     state.allFiles = files;
     state.originalNames = files.map(f => f.name);
     state.currentNames = [...state.originalNames];
+    state.historyPast = [];
+    state.historyFuture = [];
     notifyListeners('files-changed');
 }
 
@@ -32,8 +36,14 @@ export function setVisibleFiles(files) {
 }
 
 export function updateFileName(index, newName) {
+    if (state.currentNames[index] === newName) return;
     state.currentNames[index] = newName;
     notifyListeners('name-changed', { index, newName });
+}
+
+export function setCurrentNames(names, event = 'names-reset') {
+    state.currentNames = [...names];
+    notifyListeners(event);
 }
 
 export function setPathMode(mode) {
@@ -66,6 +76,8 @@ export function setSelectedTreeNode(path) {
 }
 
 export function resetAllNames() {
+    if (areNameListsEqual(state.currentNames, state.originalNames)) return;
+    saveHistorySnapshot();
     state.currentNames = [...state.originalNames];
     notifyListeners('names-reset');
 }
@@ -87,11 +99,57 @@ export function getChangedFiles() {
 
 export function commitRenames() {
     state.originalNames = [...state.currentNames];
+    state.historyPast = [];
+    state.historyFuture = [];
     notifyListeners('names-committed');
 }
 
 export function setCharWidth(width) {
     state.charWidth = width;
+}
+
+export function saveHistorySnapshot() {
+    if (!state.currentNames.length) return false;
+
+    const snapshot = [...state.currentNames];
+    const last = state.historyPast[state.historyPast.length - 1];
+    if (last && areNameListsEqual(last, snapshot)) {
+        return false;
+    }
+
+    state.historyPast.push(snapshot);
+    if (state.historyPast.length > 200) {
+        state.historyPast.shift();
+    }
+    state.historyFuture = [];
+    notifyListeners('history-changed');
+    return true;
+}
+
+export function undoRenameHistory() {
+    if (state.historyPast.length === 0) return false;
+    state.historyFuture.push([...state.currentNames]);
+    state.currentNames = state.historyPast.pop();
+    notifyListeners('names-reset');
+    notifyListeners('history-changed');
+    return true;
+}
+
+export function redoRenameHistory() {
+    if (state.historyFuture.length === 0) return false;
+    state.historyPast.push([...state.currentNames]);
+    state.currentNames = state.historyFuture.pop();
+    notifyListeners('names-reset');
+    notifyListeners('history-changed');
+    return true;
+}
+
+export function canUndoHistory() {
+    return state.historyPast.length > 0;
+}
+
+export function canRedoHistory() {
+    return state.historyFuture.length > 0;
 }
 
 // ===== Event System =====
@@ -106,4 +164,12 @@ export function onStateChange(event, callback) {
 function notifyListeners(event, data) {
     const callbacks = state.listeners.get(event) || [];
     callbacks.forEach(cb => cb(data));
+}
+
+function areNameListsEqual(left, right) {
+    if (left.length !== right.length) return false;
+    for (let i = 0; i < left.length; i++) {
+        if (left[i] !== right[i]) return false;
+    }
+    return true;
 }

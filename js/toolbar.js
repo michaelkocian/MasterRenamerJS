@@ -1,5 +1,5 @@
 // ===== Toolbar Module =====
-import { getState, setPathMode, setDisplayMode, setFileScope, setSortOrder, resetAllNames, getChangedFiles } from './state.js';
+import { getState, setPathMode, setDisplayMode, setFileScope, setSortOrder, resetAllNames, getChangedFiles, saveHistorySnapshot } from './state.js';
 import { openFolderPicker } from './fileSystem.js';
 import { applyRegexRename, isValidRegex } from './regexRename.js';
 import { renderEditor, setSearchHighlight, getSearchMatchCount } from './editor.js';
@@ -7,6 +7,7 @@ import { renderTree, refilterFiles } from './folderTree.js';
 import { openCompareDialog } from './compareDialog.js';
 import { executeRenames } from './renamer.js';
 import { toggleTheme } from './theme.js';
+import { getBlockingRenameIssues } from './renameDiagnostics.js';
 
 let findInput = null;
 let replaceInput = null;
@@ -219,6 +220,10 @@ function handleApplyRegex() {
 
 function applyRegexResults(result) {
     const state = getState();
+    const changed = result.updatedNames.some((name, index) => name !== state.currentNames[index]);
+    if (!changed) return;
+
+    saveHistorySnapshot();
     for (let i = 0; i < result.updatedNames.length; i++) {
         state.currentNames[i] = result.updatedNames[i];
     }
@@ -244,11 +249,11 @@ async function handleSave() {
         return;
     }
 
-    const duplicates = findDuplicatePaths();
-    if (duplicates.length > 0) {
-        const names = duplicates.map(d => d.path).join('\n');
+    const blockingIssues = getBlockingRenameIssues();
+    if (blockingIssues.length > 0) {
+        const names = blockingIssues.map(issue => `${issue.targetPath} - ${issue.problems.join(', ')}`).join('\n');
         showStatusToast(
-            `Cannot save — the following paths would conflict:<br><span style='font-size:0.95em;white-space:pre-line;'>${names}</span>`,
+            `Cannot save - fix these target names first:<br><span style='font-size:0.95em;white-space:pre-line;'>${names}</span>`,
             6000,
             'toast-error'
         );
@@ -256,29 +261,6 @@ async function handleSave() {
     }
 
     openCompareDialog(() => performSave());
-}
-
-function findDuplicatePaths() {
-    const state = getState();
-    const seen = new Map();
-    const duplicates = [];
-
-    for (let i = 0; i < state.allFiles.length; i++) {
-        const file = state.allFiles[i];
-        const currentName = state.currentNames[i];
-        const lastSlash = file.path.lastIndexOf('/');
-        const fullPath = lastSlash === -1
-            ? currentName
-            : file.path.substring(0, lastSlash + 1) + currentName;
-
-        if (seen.has(fullPath)) {
-            duplicates.push({ path: fullPath, indices: [seen.get(fullPath), i] });
-        } else {
-            seen.set(fullPath, i);
-        }
-    }
-
-    return duplicates;
 }
 
 async function performSave() {

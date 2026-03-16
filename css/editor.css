@@ -84,10 +84,58 @@
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .editor-line.modified {
     background: var(--diff-added-bg);
+}
+
+.editor-line-folder {
+    color: var(--text-accent);
+}
+
+.editor-line.has-invalid {
+    box-shadow: inset 3px 0 0 var(--diff-removed-text);
+}
+
+.editor-line.has-conflict {
+    box-shadow: inset 3px 0 0 #d29922;
+}
+
+.editor-line-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.editor-line-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.editor-line-badge {
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 999px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.editor-line-badge-invalid {
+    background: rgba(218, 54, 51, 0.2);
+    color: var(--diff-removed-text);
+    border: 1px solid rgba(218, 54, 51, 0.45);
+}
+
+.editor-line-badge-conflict {
+    background: rgba(210, 153, 34, 0.18);
+    color: #d29922;
+    border: 1px solid rgba(210, 153, 34, 0.45);
 }
 
 /* ===== Inline Diff Spans ===== */
