@@ -119,10 +119,178 @@ export async function renameFile(fileEntry, newName) {
     }
 }
 
+export async function readTextFile(fileEntry) {
+    try {
+        if (!fileEntry || !fileEntry.handle) {
+            return { ok: false, reason: 'No file selected' };
+        }
+
+        const file = await fileEntry.handle.getFile();
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+
+        if (!isTextLikeFile(file.name, file.type, bytes)) {
+            return {
+                ok: false,
+                reason: `${file.name} does not look like a text file`,
+            };
+        }
+
+        const encodingInfo = detectTextEncoding(bytes);
+        return {
+            ok: true,
+            text: decodeTextBytes(bytes, encodingInfo),
+            encoding: encodingInfo.encoding,
+            hasBom: encodingInfo.hasBom,
+        };
+    } catch (err) {
+        reportError(`Failed to read ${fileEntry && fileEntry.name ? fileEntry.name : 'file'}`, err);
+        return { ok: false, reason: 'Read failed' };
+    }
+}
+
+export async function writeTextFile(fileEntry, text, options = {}) {
+    try {
+        if (!fileEntry || !fileEntry.handle) {
+            return false;
+        }
+
+        await ensurePermission(fileEntry.handle, 'readwrite');
+        const writable = await fileEntry.handle.createWritable();
+        await writable.write(encodeTextBytes(text, options.encoding || 'utf-8', Boolean(options.hasBom)));
+        await writable.close();
+        return true;
+    } catch (err) {
+        reportError(`Failed to save ${fileEntry && fileEntry.name ? fileEntry.name : 'file'}`, err);
+        return false;
+    }
+}
+
 function rebuildPath(oldPath, newName) {
     const lastSlash = oldPath.lastIndexOf('/');
     if (lastSlash === -1) return newName;
     return oldPath.substring(0, lastSlash + 1) + newName;
+}
+
+function isTextLikeFile(fileName, mimeType, bytes) {
+    if (mimeType && mimeType.startsWith('text/')) {
+        return true;
+    }
+
+    const textExtensions = new Set([
+        'txt', 'md', 'json', 'js', 'ts', 'tsx', 'jsx', 'css', 'html', 'htm', 'xml', 'yml', 'yaml',
+        'csv', 'log', 'ini', 'cfg', 'conf', 'bat', 'ps1', 'sh', 'py', 'java', 'c', 'cc', 'cpp',
+        'cs', 'go', 'rs', 'php', 'rb', 'sql', 'svg', 'toml', 'lock', 'gitignore'
+    ]);
+    const extension = extractExtension(fileName);
+    if (extension && textExtensions.has(extension)) {
+        return true;
+    }
+
+    if (!bytes || bytes.length === 0) {
+        return true;
+    }
+
+    let controlCount = 0;
+    const sampleLength = Math.min(bytes.length, 8192);
+    for (let i = 0; i < sampleLength; i++) {
+        const value = bytes[i];
+        if (value === 0) {
+            return false;
+        }
+
+        const isControl = value < 32 && value !== 9 && value !== 10 && value !== 13 && value !== 12;
+        if (isControl) {
+            controlCount++;
+        }
+    }
+
+    return controlCount / sampleLength < 0.1;
+}
+
+function extractExtension(fileName) {
+    const lastDot = fileName.lastIndexOf('.');
+    if (lastDot === -1 || lastDot === fileName.length - 1) {
+        return fileName.startsWith('.') ? fileName.substring(1).toLowerCase() : '';
+    }
+    return fileName.substring(lastDot + 1).toLowerCase();
+}
+
+function detectTextEncoding(bytes) {
+    if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+        return { encoding: 'utf-8', hasBom: true, bomLength: 3 };
+    }
+
+    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+        return { encoding: 'utf-16le', hasBom: true, bomLength: 2 };
+    }
+
+    if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+        return { encoding: 'utf-16be', hasBom: true, bomLength: 2 };
+    }
+
+    return { encoding: 'utf-8', hasBom: false, bomLength: 0 };
+}
+
+function decodeTextBytes(bytes, encodingInfo) {
+    const body = bytes.slice(encodingInfo.bomLength);
+    if (encodingInfo.encoding === 'utf-16be') {
+        return new TextDecoder('utf-16le').decode(swapBytePairs(body));
+    }
+    return new TextDecoder(encodingInfo.encoding).decode(body);
+}
+
+function encodeTextBytes(text, encoding, hasBom) {
+    if (encoding === 'utf-16le' || encoding === 'utf-16be') {
+        const body = encodeUtf16(text, encoding === 'utf-16be');
+        if (!hasBom) {
+            return body;
+        }
+
+        const bom = encoding === 'utf-16be'
+            ? new Uint8Array([0xfe, 0xff])
+            : new Uint8Array([0xff, 0xfe]);
+        return concatBytes(bom, body);
+    }
+
+    const body = new TextEncoder().encode(text);
+    if (!hasBom) {
+        return body;
+    }
+
+    return concatBytes(new Uint8Array([0xef, 0xbb, 0xbf]), body);
+}
+
+function encodeUtf16(text, bigEndian) {
+    const bytes = new Uint8Array(text.length * 2);
+    for (let i = 0; i < text.length; i++) {
+        const codeUnit = text.charCodeAt(i);
+        const offset = i * 2;
+        if (bigEndian) {
+            bytes[offset] = codeUnit >> 8;
+            bytes[offset + 1] = codeUnit & 0xff;
+        } else {
+            bytes[offset] = codeUnit & 0xff;
+            bytes[offset + 1] = codeUnit >> 8;
+        }
+    }
+    return bytes;
+}
+
+function swapBytePairs(bytes) {
+    const swapped = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i += 2) {
+        swapped[i] = bytes[i + 1] ?? 0;
+        swapped[i + 1] = bytes[i] ?? 0;
+    }
+    return swapped;
+}
+
+function concatBytes(left, right) {
+    const result = new Uint8Array(left.length + right.length);
+    result.set(left, 0);
+    result.set(right, left.length);
+    return result;
 }
 
 export function buildFolderTree(files) {

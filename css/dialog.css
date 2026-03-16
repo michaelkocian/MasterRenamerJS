@@ -65,6 +65,24 @@
     color: var(--text-primary);
 }
 
+.dialog-window-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 3px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+}
+
+.dialog-window-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
 /* ===== Compare Content ===== */
 .compare-content {
     flex: 1;
@@ -180,6 +198,13 @@
 .welcome-open-btn {
     font-size: 14px;
     padding: 8px 24px;
+}
+
+.welcome-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
 
 .welcome-hint {

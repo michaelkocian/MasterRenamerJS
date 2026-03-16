@@ -31,6 +31,40 @@
     padding: 1px 4px;
 }
 
+.editor-selection-hint {
+    position: relative;
+    margin-left: auto;
+    min-width: 260px;
+    height: 18px;
+    overflow: hidden;
+    text-align: right;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+.editor-selection-hint-line {
+    padding-left: 10px;
+    padding-right: 10px;
+    position: absolute;
+    inset: 0;
+    display: block;
+    white-space: nowrap;
+    opacity: 0;
+    animation: editor-selection-hint-fade 8s infinite;
+}
+
+.editor-selection-hint-line:nth-child(2) {
+    animation-delay: 4s;
+}
+
+@keyframes editor-selection-hint-fade {
+    0% { opacity: 0; }
+    10% { opacity: 1; }
+    40% { opacity: 1; }
+    50% { opacity: 0; }
+    100% { opacity: 0; }
+}
+
 /* ===== Editor Scroll Container ===== */
 .editor-scroll {
     flex: 1;

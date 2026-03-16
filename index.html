@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="css/dialog.css">
     <link rel="stylesheet" href="css/loading.css">
     <link rel="stylesheet" href="css/toast.css">
+    <link rel="stylesheet" href="css/textEditor.css">
     <!-- Prevent caching -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
@@ -45,6 +46,9 @@
             <div class="toolbar-group">
                 <button id="btn-search-toggle" class="toolbar-btn" title="Find &amp; Replace">
                     🔍 Search &amp; Replace
+                </button>
+                <button id="btn-open-text-editor" class="toolbar-btn" title="Open current text file">
+                    📝 Edit File
                 </button>
                 <button id="btn-undo-all" class="toolbar-btn toolbar-btn-secondary" title="Undo all changes">
                     ↩ Undo All
@@ -126,6 +130,10 @@
                         <option value="ext-asc">Extension A→Z</option>
                         <option value="ext-desc">Extension Z→A</option>
                     </select>
+                    <span class="editor-selection-info editor-selection-hint" aria-hidden="true">
+                        <span class="editor-selection-hint-line">double click text files to edit them</span>
+                        <span class="editor-selection-hint-line">hold alt to see the original names</span>
+                    </span>
                     <span id="editor-selection-info" class="editor-selection-info"></span>
                 </div>
                 <div id="editor-scroll" class="editor-scroll">
@@ -164,23 +172,79 @@
             </div>
         </div>
 
+        <div id="text-editor-modal" class="dialog-overlay hidden">
+            <div id="text-editor-window" class="dialog text-editor-window" role="dialog" aria-modal="true" aria-labelledby="text-editor-title">
+                <div id="text-editor-header" class="dialog-header text-editor-header">
+                    <div class="text-editor-title-group">
+                        <h2 id="text-editor-title">Text Editor</h2>
+                        <input id="text-editor-name" class="text-editor-name hidden" type="text" value="untitled.txt" aria-label="File name">
+                        <div id="text-editor-path" class="text-editor-path">No file selected</div>
+                    </div>
+                    <div class="text-editor-header-actions">
+                        <select id="sel-text-display" class="toolbar-select" title="Diff display style">
+                            <option value="new">Current Text</option>
+                            <option value="green">Current + Added</option>
+                            <option value="green-red">Current + Changes</option>
+                            <option value="green-line" selected>Current + Markers</option>
+                            <option value="old">Original Snapshot</option>
+                        </select>
+                        <button id="btn-text-editor-toggle-size" class="dialog-window-btn" type="button" title="Maximize">□</button>
+                        <button id="btn-text-editor-close" class="dialog-close" title="Close">✕</button>
+                    </div>
+                </div>
+
+                <div class="text-editor-searchbar">
+                    <label class="toolbar-label" for="text-editor-find">Find:</label>
+                    <input id="text-editor-find" class="toolbar-input text-editor-search-input" type="text" placeholder="Search text...">
+                    <label class="toolbar-checkbox">
+                        <input type="checkbox" id="text-editor-regex">
+                        <span>Regex</span>
+                    </label>
+                    <label class="toolbar-checkbox">
+                        <input type="checkbox" id="text-editor-case-sensitive">
+                        <span>Aa</span>
+                    </label>
+                    <label class="toolbar-label" for="text-editor-replace">Replace:</label>
+                    <input id="text-editor-replace" class="toolbar-input text-editor-search-input" type="text" placeholder="Replacement...">
+                    <button id="btn-text-editor-apply" class="toolbar-btn" type="button">Replace All</button>
+                    <button id="btn-text-editor-clear" class="toolbar-btn toolbar-btn-secondary" type="button">Clear</button>
+                    <span id="text-editor-search-info" class="search-match-info"></span>
+                </div>
+
+                <div class="text-editor-body">
+                    <div id="text-editor-scroll" class="editor-scroll text-editor-scroll">
+                        <div id="text-editor-line-numbers" class="line-numbers text-editor-line-numbers"></div>
+                        <div id="text-editor-surface" class="editor text-editor-surface" tabindex="0"></div>
+                    </div>
+                </div>
+
+                <div class="dialog-footer text-editor-footer">
+                    <span id="text-editor-hint" class="text-editor-hint">Hold Alt and drag to make a square selection.</span>
+                    <span id="text-editor-status" class="compare-summary">Ready</span>
+                    <button id="btn-text-editor-save" class="toolbar-btn toolbar-btn-primary" type="button">💾 Save File</button>
+                </div>
+            </div>
+        </div>
+
         <div id="welcome-modal" class="dialog-overlay">
             <div class="dialog welcome-dialog">
                 <div class="welcome-content">
                     <h1 class="welcome-title">📂 Master Renamer</h1>
-                    <p class="welcome-subtitle">Bulk file renaming made simple</p>
+                    <p class="welcome-subtitle">Rename files, or jump straight into a scratch editor.</p>
                     <ul class="welcome-features">
-                        <li>✏️ Edit file names inline with a code-editor interface</li>
-                        <li>🔍 Find &amp; replace with regex support</li>
-                        <li>🎨 Visual diff — see added, removed, and changed characters</li>
-                        <li>📋 Review all changes side-by-side before saving</li>
-                        <li>🗂️ Browse folders, sort by name or extension, filter by scope</li>
-                        <li>⬜ Block (rectangular) selection for multi-line edits</li>
+                        <li>✏️ Inline bulk rename editing with visual diffs</li>
+                        <li>📝 Notepad-style text editor with Alt block selection</li>
+                        <li>🔍 Regex search and replace in both modes</li>
                     </ul>
-                    <button id="btn-welcome-open" class="toolbar-btn toolbar-btn-primary welcome-open-btn">
-                        📂 Open a Folder to Get Started
-                    </button>
-                    <p class="welcome-hint">Requires Chrome, Edge, or Opera (File System Access API)</p>
+                    <div class="welcome-actions">
+                        <button id="btn-welcome-open" class="toolbar-btn toolbar-btn-primary welcome-open-btn">
+                            📂 Open Folder
+                        </button>
+                        <button id="btn-welcome-editor" class="toolbar-btn welcome-open-btn" type="button">
+                            📝 Open Editor
+                        </button>
+                    </div>
+                    <p class="welcome-hint">Press Ctrl+V here to open the editor and paste immediately.</p>
                 </div>
             </div>
         </div>

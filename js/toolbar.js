@@ -6,6 +6,7 @@ import { renderEditor, setSearchHighlight, getSearchMatchCount } from './editor.
 import { refilterFiles } from './folderTree.js';
 import { openCompareDialog } from './compareDialog.js';
 import { executeRenames } from './renamer.js';
+import { openActiveTextFileFromRenameEditor, isTextEditorOpen } from './textFileEditor.js';
 import { toggleTheme } from './theme.js';
 import { getBlockingRenameIssues } from './renameDiagnostics.js';
 
@@ -49,6 +50,8 @@ function bindToolbarButtons() {
         .addEventListener('click', handleOpenFolder);
     document.getElementById('btn-search-toggle')
         .addEventListener('click', toggleSearchPanel);
+    document.getElementById('btn-open-text-editor')
+        .addEventListener('click', openActiveTextFileFromRenameEditor);
     document.getElementById('btn-undo-all')
         .addEventListener('click', handleUndoAll);
     document.getElementById('btn-save')
@@ -85,6 +88,7 @@ function bindSelectors() {
 // ===== Handlers =====
 
 function handleAltDisplayModeKeyDown(e) {
+    if (isTextEditorOpen()) return;
     if (e.altKey && !altPressed) {
         e.preventDefault();
         altPressed = true;
@@ -97,6 +101,7 @@ function handleAltDisplayModeKeyDown(e) {
 }
 
 function handleAltDisplayModeKeyUp(e) {
+    if (isTextEditorOpen()) return;
     if (!e.altKey && altPressed) {
         e.preventDefault();
         altPressed = false;

@@ -924,3 +924,8 @@ export function setupScrollSync() {
     // so vertical scrolling is handled automatically.
     // Line numbers use position:sticky for horizontal scroll.
 }
+
+export function getActiveVisibleFile() {
+    const { visibleFiles } = getState();
+    return visibleFiles[caretRow] || null;
+}

@@ -17,6 +17,10 @@
     gap: 6px;
 }
 
+.toolbar-group:last-child {
+    margin-left: auto;
+}
+
 .toolbar-regex {
     flex: 1;
     min-width: 0;

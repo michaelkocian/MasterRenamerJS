@@ -1,0 +1,136 @@
+.text-editor-window {
+    position: fixed;
+    width: min(92vw, 1200px);
+    height: min(88vh, 820px);
+    min-width: 720px;
+    min-height: 480px;
+    resize: both;
+    overflow: hidden;
+}
+
+.text-editor-window.is-maximized {
+    inset: 24px;
+    width: auto;
+    height: auto;
+    resize: none;
+}
+
+.text-editor-header {
+    cursor: move;
+    user-select: none;
+    justify-content: space-between;
+}
+
+.text-editor-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.text-editor-path {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.text-editor-name {
+    width: min(360px, 100%);
+    padding: 5px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font: inherit;
+}
+
+.text-editor-name:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+
+.text-editor-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.text-editor-searchbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    flex-wrap: wrap;
+}
+
+.text-editor-search-input {
+    min-width: 180px;
+    flex: 1 1 220px;
+}
+
+.text-editor-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    background: var(--bg-primary);
+}
+
+.text-editor-scroll {
+    flex: 1;
+}
+
+.text-editor-line-numbers {
+    min-width: 56px;
+}
+
+.text-editor-surface {
+    min-width: 100%;
+}
+
+.text-editor-line {
+    justify-content: flex-start;
+}
+
+.text-editor-line.is-readonly {
+    opacity: 0.78;
+}
+
+.text-editor-line.is-modified {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.text-editor-footer {
+    justify-content: space-between;
+}
+
+.text-editor-hint {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+    .text-editor-window {
+        min-width: 0;
+        width: calc(100vw - 16px);
+        height: calc(100vh - 16px);
+    }
+
+    .text-editor-window.is-maximized {
+        inset: 8px;
+    }
+
+    .text-editor-searchbar {
+        padding: 8px 10px;
+    }
+
+    .text-editor-hint {
+        display: none;
+    }
+}
