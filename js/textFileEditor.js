@@ -6,6 +6,14 @@ import { readTextFile, writeTextFile } from './fileSystem.js';
 import { getState } from './state.js';
 
 const selection = new BlockSelection();
+const rangeSelection = {
+    active: false,
+    anchorRow: 0,
+    anchorCol: 0,
+    focusRow: 0,
+    focusCol: 0,
+};
+
 const session = {
     file: null,
     mode: 'file',
@@ -23,6 +31,7 @@ const session = {
     caretRow: 0,
     caretCol: 0,
     isDraggingSelection: false,
+    mouseSelectionMode: null,
     isDirty: false,
     isOpen: false,
     isMaximized: false,
@@ -113,7 +122,8 @@ export async function openStandaloneTextEditor(initialText = '', suggestedName =
     session.isDirty = initialText.length > 0;
     session.isOpen = true;
     session.isDraggingSelection = false;
-    selection.clear();
+    session.mouseSelectionMode = null;
+    clearAllSelections();
 
     resetSearchControls();
     applyInitialWindowBounds();
@@ -159,7 +169,8 @@ export async function openTextFileEditor(fileEntry) {
     session.isDirty = false;
     session.isOpen = true;
     session.isDraggingSelection = false;
-    selection.clear();
+    session.mouseSelectionMode = null;
+    clearAllSelections();
 
     resetSearchControls();
     applyInitialWindowBounds();
@@ -208,6 +219,7 @@ function bindModalEvents() {
     });
 
     surfaceEl.addEventListener('mousedown', handleMouseDown);
+    surfaceEl.addEventListener('dblclick', handleSurfaceDoubleClick);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     surfaceEl.addEventListener('focus', () => hiddenInput.focus());
@@ -308,7 +320,7 @@ function clampCaret(lineCount) {
     if (lineCount <= 0) {
         session.caretRow = 0;
         session.caretCol = 0;
-        selection.clear();
+        clearAllSelections();
         return;
     }
 
@@ -318,6 +330,7 @@ function clampCaret(lineCount) {
     if (selection.active) {
         selection.clampToLines(getRenderedLines());
     }
+    clampRangeSelection(getRenderedLines());
 }
 
 function buildLineMappings(lines) {
@@ -416,6 +429,12 @@ function createLineElement() {
 
 function renderSelectionOverlays() {
     clearOverlays();
+    if (hasRangeSelection()) {
+        renderRangeSelection();
+        renderCaret();
+        return;
+    }
+
     if (!selection.active || selection.isCollapsed()) {
         renderCaret();
         return;
@@ -436,6 +455,33 @@ function renderSelectionOverlays() {
     renderCaret();
 }
 
+function renderRangeSelection() {
+    const lines = getRenderedLines();
+    const bounds = getRangeSelectionBounds();
+    if (!bounds) {
+        return;
+    }
+
+    for (let row = bounds.startRow; row <= bounds.endRow; row++) {
+        const lineLength = (lines[row] || '').length;
+        const startCol = row === bounds.startRow ? bounds.startCol : 0;
+        const endCol = row === bounds.endRow ? bounds.endCol : lineLength;
+        if (startCol === endCol) {
+            continue;
+        }
+
+        const minCol = modelToVisualCol(row, startCol);
+        const maxCol = modelToVisualCol(row, endCol);
+        const highlight = document.createElement('div');
+        highlight.className = 'block-selection-highlight';
+        highlight.style.top = `${row * 20 + 4}px`;
+        highlight.style.left = `${minCol * charWidth + 8}px`;
+        highlight.style.width = `${Math.max(maxCol - minCol, 1) * charWidth}px`;
+        highlight.style.height = '20px';
+        surfaceEl.appendChild(highlight);
+    }
+}
+
 function renderCaret() {
     const caret = document.createElement('div');
     caret.className = 'editor-caret';
@@ -452,6 +498,13 @@ function updateStatus() {
     const modifiedLines = countModifiedLines();
     const extraRemoved = Math.max(session.originalLines.length - session.currentLines.length, 0);
     const modeText = session.mode === 'standalone' ? 'Blank editor' : 'File editor';
+    if (hasRangeSelection()) {
+        const bounds = getRangeSelectionBounds();
+        const selectedRows = bounds.endRow - bounds.startRow + 1;
+        statusEl.textContent = `${modeText} • Sel ${selectedRows} line${selectedRows !== 1 ? 's' : ''} • ${modifiedLines} modified lines${extraRemoved ? ` • ${extraRemoved} deleted line${extraRemoved !== 1 ? 's' : ''} not shown inline` : ''}`;
+        return;
+    }
+
     if (selection.active && !selection.isCollapsed()) {
         statusEl.textContent = `${modeText} • Sel ${selection.rowCount}×${selection.colSpan} • ${modifiedLines} modified lines${extraRemoved ? ` • ${extraRemoved} deleted line${extraRemoved !== 1 ? 's' : ''} not shown inline` : ''}`;
         return;
@@ -472,7 +525,7 @@ function countModifiedLines() {
 }
 
 function handleMouseDown(event) {
-    if (!session.isOpen) return;
+    if (!session.isOpen || event.button !== 0) return;
     event.preventDefault();
     hiddenInput.focus();
 
@@ -487,13 +540,41 @@ function handleMouseDown(event) {
     session.caretCol = Math.max(0, Math.min(col, (lines[row] || '').length));
 
     if (event.altKey && session.displayMode !== 'old') {
+        clearRangeSelection();
         selection.begin(session.caretRow, session.caretCol);
+        session.mouseSelectionMode = 'block';
         session.isDraggingSelection = true;
     } else {
         selection.clear();
-        session.isDraggingSelection = false;
+        beginRangeSelection(session.caretRow, session.caretCol);
+        session.mouseSelectionMode = 'range';
+        session.isDraggingSelection = true;
     }
 
+    renderSelectionOverlays();
+    updateStatus();
+}
+
+function handleSurfaceDoubleClick(event) {
+    if (!session.isOpen || event.button !== 0) return;
+    event.preventDefault();
+    hiddenInput.focus();
+
+    const lines = getRenderedLines();
+    if (!lines.length) return;
+
+    const position = pixelToRowCol(surfaceEl, event.clientX, event.clientY, charWidth);
+    const row = Math.max(0, Math.min(position.row, lines.length - 1));
+    const rawCol = visualToModelCol(row, position.col);
+    const col = Math.max(0, Math.min(rawCol, (lines[row] || '').length));
+    const wordBounds = findWordBounds(lines[row] || '', col);
+
+    selection.clear();
+    setRangeSelection(row, wordBounds.startCol, row, wordBounds.endCol);
+    session.caretRow = row;
+    session.caretCol = wordBounds.endCol;
+    session.mouseSelectionMode = null;
+    session.isDraggingSelection = false;
     renderSelectionOverlays();
     updateStatus();
 }
@@ -510,16 +591,29 @@ function handleMouseMove(event) {
 
     const position = pixelToRowCol(surfaceEl, event.clientX, event.clientY, charWidth);
     const row = Math.max(0, Math.min(position.row, lines.length - 1));
-    const col = visualToModelCol(row, position.col);
-    selection.moveTo(row, Math.max(0, col));
+    const col = Math.max(0, visualToModelCol(row, position.col));
+    if (session.mouseSelectionMode === 'block') {
+        selection.moveTo(row, col);
+        session.caretCol = Math.max(0, col);
+    } else {
+        const clampedCol = Math.min(col, (lines[row] || '').length);
+        updateRangeSelection(row, clampedCol);
+        session.caretCol = clampedCol;
+    }
     session.caretRow = row;
-    session.caretCol = Math.max(0, col);
     renderSelectionOverlays();
     updateStatus();
 }
 
 function handleMouseUp() {
     session.isDraggingSelection = false;
+    session.mouseSelectionMode = null;
+    if (rangeSelection.active && isRangeSelectionCollapsed()) {
+        clearRangeSelection();
+    }
+    if (selection.active && selection.isCollapsed()) {
+        selection.clear();
+    }
     session.dragState = null;
 }
 
@@ -564,14 +658,15 @@ function handleCommandShortcut(event) {
 }
 
 function handleNavigationKeys(event, lines) {
-    const extendSelection = event.altKey && event.shiftKey && session.displayMode !== 'old';
+    const extendBlockSelection = event.altKey && event.shiftKey && session.displayMode !== 'old';
+    const extendRangeSelection = event.shiftKey && !event.altKey;
     const handlers = {
-        ArrowLeft: () => moveCaret(0, -1, extendSelection, lines),
-        ArrowRight: () => moveCaret(0, 1, extendSelection, lines),
-        ArrowUp: () => moveCaret(-1, 0, extendSelection, lines),
-        ArrowDown: () => moveCaret(1, 0, extendSelection, lines),
-        Home: () => moveToLineStart(extendSelection, lines),
-        End: () => moveToLineEnd(extendSelection, lines),
+        ArrowLeft: () => moveCaret(0, -1, extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
+        ArrowRight: () => moveCaret(0, 1, extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
+        ArrowUp: () => moveCaret(-1, 0, extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
+        ArrowDown: () => moveCaret(1, 0, extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
+        Home: () => moveToLineStart(extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
+        End: () => moveToLineEnd(extendBlockSelection ? 'block' : (extendRangeSelection ? 'range' : null), lines),
     };
 
     const handler = handlers[event.key];
@@ -582,48 +677,70 @@ function handleNavigationKeys(event, lines) {
     return true;
 }
 
-function moveCaret(rowDelta, colDelta, extendSelection, lines) {
+function moveCaret(rowDelta, colDelta, selectionMode, lines) {
     const nextRow = Math.max(0, Math.min(session.caretRow + rowDelta, lines.length - 1));
     const nextCol = Math.max(0, session.caretCol + colDelta);
+    const clampedCol = Math.min(nextCol, (lines[nextRow] || '').length);
 
-    if (extendSelection) {
+    if (selectionMode === 'block') {
+        clearRangeSelection();
         if (!selection.active) {
             selection.begin(session.caretRow, session.caretCol);
         }
         selection.moveTo(nextRow, nextCol);
-    } else {
+    } else if (selectionMode === 'range') {
         selection.clear();
+        if (!rangeSelection.active) {
+            beginRangeSelection(session.caretRow, session.caretCol);
+        }
+        updateRangeSelection(nextRow, clampedCol);
+    } else {
+        clearAllSelections();
     }
 
     session.caretRow = nextRow;
-    session.caretCol = Math.min(nextCol, (lines[nextRow] || '').length);
+    session.caretCol = selectionMode === 'block' ? nextCol : clampedCol;
     renderSelectionOverlays();
     updateStatus();
 }
 
-function moveToLineStart(extendSelection, lines) {
-    if (extendSelection) {
+function moveToLineStart(selectionMode, lines) {
+    if (selectionMode === 'block') {
+        clearRangeSelection();
         if (!selection.active) {
             selection.begin(session.caretRow, session.caretCol);
         }
         selection.moveTo(session.caretRow, 0);
-    } else {
+    } else if (selectionMode === 'range') {
         selection.clear();
+        if (!rangeSelection.active) {
+            beginRangeSelection(session.caretRow, session.caretCol);
+        }
+        updateRangeSelection(session.caretRow, 0);
+    } else {
+        clearAllSelections();
     }
     session.caretCol = 0;
     renderSelectionOverlays();
     updateStatus();
 }
 
-function moveToLineEnd(extendSelection, lines) {
+function moveToLineEnd(selectionMode, lines) {
     const endCol = (lines[session.caretRow] || '').length;
-    if (extendSelection) {
+    if (selectionMode === 'block') {
+        clearRangeSelection();
         if (!selection.active) {
             selection.begin(session.caretRow, session.caretCol);
         }
         selection.moveTo(session.caretRow, endCol);
-    } else {
+    } else if (selectionMode === 'range') {
         selection.clear();
+        if (!rangeSelection.active) {
+            beginRangeSelection(session.caretRow, session.caretCol);
+        }
+        updateRangeSelection(session.caretRow, endCol);
+    } else {
+        clearAllSelections();
     }
     session.caretCol = endCol;
     renderSelectionOverlays();
@@ -633,14 +750,24 @@ function moveToLineEnd(extendSelection, lines) {
 function handleClipboardKeys(event, lines) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
         event.preventDefault();
+        if (hasRangeSelection()) {
+            void writeClipboardText(extractRangeSelectionText(getRenderedLines()));
+            return true;
+        }
         if (hasBlockWidth()) {
-            void writeClipboardText(selection.extractTextFromLines(session.currentLines));
+            void writeClipboardText(selection.extractTextFromLines(getRenderedLines()));
         }
         return true;
     }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x') {
         event.preventDefault();
+        if (hasRangeSelection()) {
+            if (session.displayMode !== 'old') {
+                void cutRangeSelection();
+            }
+            return true;
+        }
         if (hasBlockWidth()) {
             void cutBlockSelection();
         }
@@ -687,13 +814,21 @@ function handleEditingKeys(event, lines) {
 
     if (event.key === 'Enter') {
         event.preventDefault();
-        insertTextAtCaret('\n');
+        if (hasRangeSelection()) {
+            replaceRangeSelection('\n');
+        } else {
+            insertTextAtCaret('\n');
+        }
         return true;
     }
 
     if (event.key === 'Tab') {
         event.preventDefault();
-        insertTextAtCaret('    ');
+        if (hasRangeSelection()) {
+            replaceRangeSelection('    ');
+        } else {
+            insertTextAtCaret('    ');
+        }
         return true;
     }
 
@@ -704,6 +839,11 @@ function handleInput() {
     const text = hiddenInput.value;
     hiddenInput.value = '';
     if (!text || session.displayMode === 'old') return;
+
+    if (hasRangeSelection()) {
+        replaceRangeSelection(text);
+        return;
+    }
 
     if (hasBlockWidth()) {
         replaceBlockSelection(text);
@@ -720,35 +860,11 @@ function handleInput() {
 
 function insertTextAtCaret(text) {
     const row = Math.max(0, Math.min(session.caretRow, session.currentLines.length - 1));
-    const line = session.currentLines[row] || '';
-    const paddedLine = line.padEnd(session.caretCol, ' ');
-    const parts = splitClipboardLines(text);
-
-    if (parts.length === 1) {
-        const updatedLine = paddedLine.substring(0, session.caretCol) + text + paddedLine.substring(session.caretCol);
-        const nextLines = [...session.currentLines];
-        nextLines[row] = updatedLine;
-        commitContentChange(nextLines);
-        session.caretCol += text.length;
-        selection.clear();
-        renderEditor();
-        return;
-    }
-
-    const before = paddedLine.substring(0, session.caretCol);
-    const after = paddedLine.substring(session.caretCol);
-    const nextLines = [
-        ...session.currentLines.slice(0, row),
-        before + parts[0],
-        ...parts.slice(1, -1),
-        parts[parts.length - 1] + after,
-        ...session.currentLines.slice(row + 1),
-    ];
-
-    commitContentChange(nextLines);
-    session.caretRow = row + parts.length - 1;
-    session.caretCol = parts[parts.length - 1].length;
-    selection.clear();
+    const insertion = applyTextInsertion(session.currentLines, row, session.caretCol, text);
+    commitContentChange(insertion.lines);
+    session.caretRow = insertion.caretRow;
+    session.caretCol = insertion.caretCol;
+    clearAllSelections();
     renderEditor();
 }
 
@@ -785,6 +901,11 @@ function replaceBlockSelection(text) {
 }
 
 function handleBackspace() {
+    if (hasRangeSelection()) {
+        deleteRangeSelection();
+        return;
+    }
+
     if (hasBlockWidth()) {
         deleteSelectedBlock();
         return;
@@ -832,6 +953,11 @@ function handleBackspace() {
 }
 
 function handleDelete() {
+    if (hasRangeSelection()) {
+        deleteRangeSelection();
+        return;
+    }
+
     if (hasBlockWidth()) {
         deleteSelectedBlock();
         return;
@@ -888,11 +1014,22 @@ async function cutBlockSelection() {
     deleteSelectedBlock();
 }
 
+async function cutRangeSelection() {
+    const text = extractRangeSelectionText(session.currentLines);
+    await writeClipboardText(text);
+    deleteRangeSelection();
+}
+
 async function pasteClipboard() {
     const text = await readClipboardText();
     if (!text || session.displayMode === 'old') return;
 
     const clipLines = splitClipboardLines(text);
+    if (hasRangeSelection()) {
+        replaceRangeSelection(text);
+        return;
+    }
+
     if (hasBlockWidth()) {
         const pasteLines = buildPasteLines(clipLines, selection.rowCount);
         const result = selection.replaceTextInLines(session.currentLines, pasteLines);
@@ -929,13 +1066,16 @@ async function pasteClipboard() {
 
 function selectAll(lines) {
     if (!lines.length) return;
-    const maxCol = Math.max(...lines.map(line => line.length), 0);
-    selection.begin(0, 0);
-    selection.moveTo(lines.length - 1, maxCol);
+    selection.clear();
+    setRangeSelection(0, 0, lines.length - 1, (lines[lines.length - 1] || '').length);
     session.caretRow = lines.length - 1;
-    session.caretCol = maxCol;
+    session.caretCol = (lines[lines.length - 1] || '').length;
     renderSelectionOverlays();
     updateStatus();
+}
+
+function hasRangeSelection() {
+    return rangeSelection.active && !isRangeSelectionCollapsed();
 }
 
 function hasBlockWidth() {
@@ -948,11 +1088,203 @@ function hasMultiRowCursor() {
 
 function preserveMultiRowCursor(minRow, maxRow, col) {
     if (maxRow > minRow) {
+        clearRangeSelection();
         selection.begin(minRow, col);
         selection.moveTo(maxRow, col);
     } else {
         selection.clear();
     }
+}
+
+function clearAllSelections() {
+    selection.clear();
+    clearRangeSelection();
+}
+
+function beginRangeSelection(row, col) {
+    rangeSelection.active = true;
+    rangeSelection.anchorRow = row;
+    rangeSelection.anchorCol = col;
+    rangeSelection.focusRow = row;
+    rangeSelection.focusCol = col;
+}
+
+function updateRangeSelection(row, col) {
+    if (!rangeSelection.active) {
+        beginRangeSelection(row, col);
+        return;
+    }
+    rangeSelection.focusRow = row;
+    rangeSelection.focusCol = col;
+}
+
+function setRangeSelection(anchorRow, anchorCol, focusRow, focusCol) {
+    rangeSelection.active = true;
+    rangeSelection.anchorRow = anchorRow;
+    rangeSelection.anchorCol = anchorCol;
+    rangeSelection.focusRow = focusRow;
+    rangeSelection.focusCol = focusCol;
+}
+
+function clearRangeSelection() {
+    rangeSelection.active = false;
+}
+
+function isRangeSelectionCollapsed() {
+    return !rangeSelection.active || (
+        rangeSelection.anchorRow === rangeSelection.focusRow
+        && rangeSelection.anchorCol === rangeSelection.focusCol
+    );
+}
+
+function getRangeSelectionBounds() {
+    if (!rangeSelection.active || isRangeSelectionCollapsed()) {
+        return null;
+    }
+
+    const anchor = { row: rangeSelection.anchorRow, col: rangeSelection.anchorCol };
+    const focus = { row: rangeSelection.focusRow, col: rangeSelection.focusCol };
+    if (comparePositions(anchor, focus) <= 0) {
+        return {
+            startRow: anchor.row,
+            startCol: anchor.col,
+            endRow: focus.row,
+            endCol: focus.col,
+        };
+    }
+
+    return {
+        startRow: focus.row,
+        startCol: focus.col,
+        endRow: anchor.row,
+        endCol: anchor.col,
+    };
+}
+
+function comparePositions(left, right) {
+    if (left.row !== right.row) {
+        return left.row - right.row;
+    }
+    return left.col - right.col;
+}
+
+function clampRangeSelection(lines) {
+    if (!rangeSelection.active) {
+        return;
+    }
+
+    const maxRow = Math.max(0, lines.length - 1);
+    rangeSelection.anchorRow = Math.max(0, Math.min(rangeSelection.anchorRow, maxRow));
+    rangeSelection.focusRow = Math.max(0, Math.min(rangeSelection.focusRow, maxRow));
+    rangeSelection.anchorCol = Math.max(0, Math.min(rangeSelection.anchorCol, (lines[rangeSelection.anchorRow] || '').length));
+    rangeSelection.focusCol = Math.max(0, Math.min(rangeSelection.focusCol, (lines[rangeSelection.focusRow] || '').length));
+}
+
+function extractRangeSelectionText(lines) {
+    const bounds = getRangeSelectionBounds();
+    if (!bounds) {
+        return '';
+    }
+
+    if (bounds.startRow === bounds.endRow) {
+        return (lines[bounds.startRow] || '').substring(bounds.startCol, bounds.endCol);
+    }
+
+    const parts = [];
+    parts.push((lines[bounds.startRow] || '').substring(bounds.startCol));
+    for (let row = bounds.startRow + 1; row < bounds.endRow; row++) {
+        parts.push(lines[row] || '');
+    }
+    parts.push((lines[bounds.endRow] || '').substring(0, bounds.endCol));
+    return parts.join('\n');
+}
+
+function deleteRangeFromLines(lines, bounds) {
+    if (bounds.startRow === bounds.endRow) {
+        const nextLines = [...lines];
+        const line = nextLines[bounds.startRow] || '';
+        nextLines[bounds.startRow] = line.substring(0, bounds.startCol) + line.substring(bounds.endCol);
+        return {
+            lines: normalizeLines(nextLines),
+            caretRow: bounds.startRow,
+            caretCol: bounds.startCol,
+        };
+    }
+
+    const firstLine = lines[bounds.startRow] || '';
+    const lastLine = lines[bounds.endRow] || '';
+    const mergedLine = firstLine.substring(0, bounds.startCol) + lastLine.substring(bounds.endCol);
+    const nextLines = [
+        ...lines.slice(0, bounds.startRow),
+        mergedLine,
+        ...lines.slice(bounds.endRow + 1),
+    ];
+
+    return {
+        lines: normalizeLines(nextLines),
+        caretRow: bounds.startRow,
+        caretCol: bounds.startCol,
+    };
+}
+
+function applyTextInsertion(lines, row, col, text) {
+    const safeRow = Math.max(0, Math.min(row, lines.length - 1));
+    const line = lines[safeRow] || '';
+    const safeCol = Math.max(0, Math.min(col, line.length));
+    const paddedLine = line.padEnd(safeCol, ' ');
+    const parts = splitClipboardLines(text);
+
+    if (parts.length === 1) {
+        const nextLines = [...lines];
+        nextLines[safeRow] = paddedLine.substring(0, safeCol) + text + paddedLine.substring(safeCol);
+        return {
+            lines: normalizeLines(nextLines),
+            caretRow: safeRow,
+            caretCol: safeCol + text.length,
+        };
+    }
+
+    return {
+        lines: normalizeLines([
+            ...lines.slice(0, safeRow),
+            paddedLine.substring(0, safeCol) + parts[0],
+            ...parts.slice(1, -1),
+            parts[parts.length - 1] + paddedLine.substring(safeCol),
+            ...lines.slice(safeRow + 1),
+        ]),
+        caretRow: safeRow + parts.length - 1,
+        caretCol: parts[parts.length - 1].length,
+    };
+}
+
+function replaceRangeSelection(text) {
+    const bounds = getRangeSelectionBounds();
+    if (!bounds) {
+        insertTextAtCaret(text);
+        return;
+    }
+
+    const deleted = deleteRangeFromLines(session.currentLines, bounds);
+    const inserted = applyTextInsertion(deleted.lines, deleted.caretRow, deleted.caretCol, text);
+    commitContentChange(inserted.lines);
+    session.caretRow = inserted.caretRow;
+    session.caretCol = inserted.caretCol;
+    clearAllSelections();
+    renderEditor();
+}
+
+function deleteRangeSelection() {
+    const bounds = getRangeSelectionBounds();
+    if (!bounds) {
+        return;
+    }
+
+    const deleted = deleteRangeFromLines(session.currentLines, bounds);
+    commitContentChange(deleted.lines);
+    session.caretRow = deleted.caretRow;
+    session.caretCol = deleted.caretCol;
+    clearAllSelections();
+    renderEditor();
 }
 
 function commitContentChange(nextLines) {
@@ -1058,13 +1390,14 @@ function closeTextEditor() {
     }
 
     modalEl.classList.add('hidden');
-    selection.clear();
+    clearAllSelections();
     session.file = null;
     session.mode = 'file';
     session.downloadName = 'untitled.txt';
     session.isOpen = false;
     session.isDirty = false;
     session.isDraggingSelection = false;
+    session.mouseSelectionMode = null;
 
     if (!getState().directoryHandle) {
         const welcomeModal = document.getElementById('welcome-modal');
@@ -1110,8 +1443,9 @@ function applyReplaceAll() {
         return;
     }
 
+    const replacementText = regexCheckbox.checked ? normalizeRegexReplacement(replaceInput.value) : replaceInput.value;
     const originalText = joinLines(session.currentLines, session.eol);
-    const replacedText = originalText.replace(regex, replaceInput.value);
+    const replacedText = originalText.replace(regex, replacementText);
     if (replacedText === originalText) {
         showToast('No matches replaced', 2800, 'toast-warning');
         return;
@@ -1390,6 +1724,69 @@ function countMatches(text, regex) {
 
 function escapeRegex(text) {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeRegexReplacement(text) {
+    return String(text).replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|n|r|t|f|v|0|\\)/g, (_, escapeCode) => {
+        switch (escapeCode) {
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        case 'f':
+            return '\f';
+        case 'v':
+            return '\v';
+        case '0':
+            return '\0';
+        case '\\':
+            return '\\';
+        default:
+            if (escapeCode.startsWith('u')) {
+                return String.fromCharCode(parseInt(escapeCode.slice(1), 16));
+            }
+            if (escapeCode.startsWith('x')) {
+                return String.fromCharCode(parseInt(escapeCode.slice(1), 16));
+            }
+            return escapeCode;
+        }
+    });
+}
+
+function findWordBounds(line, col) {
+    if (!line) {
+        return { startCol: 0, endCol: 0 };
+    }
+
+    let index = Math.max(0, Math.min(col, line.length - 1));
+    if (col === line.length && line.length > 0) {
+        index = line.length - 1;
+    }
+
+    const kind = classifySelectableChar(line[index]);
+    let startCol = index;
+    let endCol = index + 1;
+
+    while (startCol > 0 && classifySelectableChar(line[startCol - 1]) === kind) {
+        startCol--;
+    }
+    while (endCol < line.length && classifySelectableChar(line[endCol]) === kind) {
+        endCol++;
+    }
+
+    return { startCol, endCol };
+}
+
+function classifySelectableChar(char) {
+    if (/\s/.test(char)) {
+        return 'space';
+    }
+    if (/[\p{L}\p{N}_]/u.test(char)) {
+        return 'word';
+    }
+    return 'punct';
 }
 
 function escapeHtml(text) {

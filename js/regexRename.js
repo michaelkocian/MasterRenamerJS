@@ -5,6 +5,7 @@ export function applyRegexRename(pattern, replacement, isRegex, caseSensitive) {
     const { visibleFiles, allFiles, currentNames, pathMode } = getState();
     const regex = buildRegex(pattern, isRegex, caseSensitive);
     if (!regex) return null;
+    const normalizedReplacement = isRegex ? normalizeRegexReplacement(replacement) : replacement;
 
     const updatedNames = [...currentNames];
     let matchCount = 0;
@@ -18,7 +19,7 @@ export function applyRegexRename(pattern, replacement, isRegex, caseSensitive) {
             ? rebuildPathDisplay(file.path, currentName)
             : currentName;
 
-        const result = applyReplacement(displayName, regex, replacement);
+        const result = applyReplacement(displayName, regex, normalizedReplacement);
 
         if (result.changed) {
             updatedNames[globalIndex] = rebuildFullName(
@@ -47,6 +48,35 @@ function buildRegex(pattern, isRegex, caseSensitive) {
 
 function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeRegexReplacement(text) {
+    return String(text).replace(/\\(u[0-9a-fA-F]{4}|x[0-9a-fA-F]{2}|n|r|t|f|v|0|\\)/g, (_, escapeCode) => {
+        switch (escapeCode) {
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        case 'f':
+            return '\f';
+        case 'v':
+            return '\v';
+        case '0':
+            return '\0';
+        case '\\':
+            return '\\';
+        default:
+            if (escapeCode.startsWith('u')) {
+                return String.fromCharCode(parseInt(escapeCode.slice(1), 16));
+            }
+            if (escapeCode.startsWith('x')) {
+                return String.fromCharCode(parseInt(escapeCode.slice(1), 16));
+            }
+            return escapeCode;
+        }
+    });
 }
 
 function rebuildPathDisplay(originalPath, currentName) {
