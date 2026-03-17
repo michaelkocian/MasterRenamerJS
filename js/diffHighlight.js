@@ -72,21 +72,66 @@ function opsToSegments(ops, original, modified) {
     const segments = [];
     let buffer = '';
     let currentType = null;
+    let pendingRemoved = '';
+    let pendingAdded = '';
+
+    function pushSegment(type, text) {
+        if (!text) {
+            return;
+        }
+
+        const last = segments[segments.length - 1];
+        if (last && last.type === type) {
+            last.text += text;
+            return;
+        }
+
+        segments.push({ type, text });
+    }
+
+    function flushBuffer() {
+        if (!buffer) {
+            return;
+        }
+
+        pushSegment(currentType, buffer);
+        buffer = '';
+    }
+
+    function flushPendingReplacement() {
+        if (!pendingRemoved && !pendingAdded) {
+            return;
+        }
+
+        pushSegment('removed', pendingRemoved);
+        pushSegment('added', pendingAdded);
+        pendingRemoved = '';
+        pendingAdded = '';
+    }
 
     for (const op of ops) {
+        if (op.type === 'replace') {
+            flushBuffer();
+            pendingRemoved += op.oldChar;
+            pendingAdded += op.newChar;
+            continue;
+        }
+
+        flushPendingReplacement();
         const segType = mapOpType(op);
         const segText = mapOpText(op);
 
         if (segType === currentType) {
             buffer += segText;
         } else {
-            if (buffer) segments.push({ type: currentType, text: buffer });
+            flushBuffer();
             currentType = segType;
             buffer = segText;
         }
     }
 
-    if (buffer) segments.push({ type: currentType, text: buffer });
+    flushBuffer();
+    flushPendingReplacement();
     return segments;
 }
 

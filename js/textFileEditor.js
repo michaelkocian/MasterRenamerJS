@@ -58,6 +58,7 @@ let regexCheckbox = null;
 let caseCheckbox = null;
 let searchInfoEl = null;
 let charWidth = 8;
+const TAB_SIZE = 4;
 
 export function initTextFileEditor() {
     modalEl = document.getElementById('text-editor-modal');
@@ -334,41 +335,16 @@ function clampCaret(lineCount) {
 }
 
 function buildLineMappings(lines) {
-    if (session.displayMode !== 'green-red') {
-        session.lineMappings = [];
-        return;
-    }
-
     session.lineMappings = lines.map((line, index) => {
+        if (session.displayMode !== 'green-red') {
+            return buildTextColumnMapping(line || '');
+        }
+
         const originalLine = session.originalLines[index] || '';
         if (line === originalLine) return null;
 
         const segments = computeCharDiff(originalLine, line);
-        const modelToVisual = [];
-        const visualToModel = [];
-        let modelCol = 0;
-        let visualCol = 0;
-
-        for (const segment of segments) {
-            if (segment.type === 'same' || segment.type === 'added') {
-                for (let i = 0; i < segment.text.length; i++) {
-                    modelToVisual[modelCol] = visualCol;
-                    visualToModel[visualCol] = modelCol;
-                    modelCol++;
-                    visualCol++;
-                }
-                continue;
-            }
-
-            for (let i = 0; i < segment.text.length; i++) {
-                visualToModel[visualCol] = modelCol;
-                visualCol++;
-            }
-        }
-
-        modelToVisual[modelCol] = visualCol;
-        visualToModel[visualCol] = modelCol;
-        return { modelToVisual, visualToModel };
+        return buildSegmentColumnMapping(segments);
     });
 }
 
@@ -498,6 +474,7 @@ function updateStatus() {
     const modifiedLines = countModifiedLines();
     const extraRemoved = Math.max(session.originalLines.length - session.currentLines.length, 0);
     const modeText = session.mode === 'standalone' ? 'Blank editor' : 'File editor';
+    const displayCol = modelToVisualCol(session.caretRow, session.caretCol) + 1;
     if (hasRangeSelection()) {
         const bounds = getRangeSelectionBounds();
         const selectedRows = bounds.endRow - bounds.startRow + 1;
@@ -510,7 +487,7 @@ function updateStatus() {
         return;
     }
 
-    statusEl.textContent = `${modeText} • Ln ${session.caretRow + 1}, Col ${session.caretCol + 1} • ${modifiedLines} modified lines${session.isDirty ? ' • unsaved' : ''}${extraRemoved ? ` • ${extraRemoved} deleted line${extraRemoved !== 1 ? 's' : ''} not shown inline` : ''}`;
+    statusEl.textContent = `${modeText} • Ln ${session.caretRow + 1}, Col ${displayCol} • ${modifiedLines} modified lines${session.isDirty ? ' • unsaved' : ''}${extraRemoved ? ` • ${extraRemoved} deleted line${extraRemoved !== 1 ? 's' : ''} not shown inline` : ''}`;
 }
 
 function countModifiedLines() {
@@ -1648,6 +1625,81 @@ function applyWindowBounds(bounds) {
     windowEl.style.height = `${bounds.height}px`;
     windowEl.style.left = `${bounds.left}px`;
     windowEl.style.top = `${bounds.top}px`;
+}
+
+function buildTextColumnMapping(text) {
+    const modelToVisual = [0];
+    const visualToModel = [0];
+    let visualCol = 0;
+
+    for (let modelCol = 0; modelCol < text.length; modelCol++) {
+        const nextModelCol = modelCol + 1;
+        const width = getCharacterVisualWidth(text[modelCol], visualCol);
+        fillVisualToModelRange(visualToModel, visualCol, width, modelCol, nextModelCol);
+        visualCol += width;
+        modelToVisual[nextModelCol] = visualCol;
+        visualToModel[visualCol] = nextModelCol;
+    }
+
+    return { modelToVisual, visualToModel };
+}
+
+function buildSegmentColumnMapping(segments) {
+    const modelToVisual = [0];
+    const visualToModel = [0];
+    let modelCol = 0;
+    let visualCol = 0;
+
+    for (const segment of segments) {
+        if (segment.type === 'same' || segment.type === 'added') {
+            for (let i = 0; i < segment.text.length; i++) {
+                const nextModelCol = modelCol + 1;
+                const width = getCharacterVisualWidth(segment.text[i], visualCol);
+                fillVisualToModelRange(visualToModel, visualCol, width, modelCol, nextModelCol);
+                visualCol += width;
+                modelCol = nextModelCol;
+                modelToVisual[modelCol] = visualCol;
+                visualToModel[visualCol] = modelCol;
+            }
+            continue;
+        }
+
+        for (let i = 0; i < segment.text.length; i++) {
+            const width = getCharacterVisualWidth(segment.text[i], visualCol);
+            for (let offset = 1; offset <= width; offset++) {
+                visualToModel[visualCol + offset] = modelCol;
+            }
+            visualCol += width;
+        }
+    }
+
+    modelToVisual[modelCol] = visualCol;
+    visualToModel[visualCol] = modelCol;
+    return { modelToVisual, visualToModel };
+}
+
+function getCharacterVisualWidth(char, visualCol) {
+    if (char !== '\t') {
+        return 1;
+    }
+
+    const remainder = visualCol % TAB_SIZE;
+    return remainder === 0 ? TAB_SIZE : TAB_SIZE - remainder;
+}
+
+function fillVisualToModelRange(visualToModel, startVisualCol, width, startModelCol, endModelCol) {
+    if (width <= 0) {
+        return;
+    }
+
+    if (width === 1) {
+        visualToModel[startVisualCol + 1] = endModelCol;
+        return;
+    }
+
+    for (let offset = 1; offset < width; offset++) {
+        visualToModel[startVisualCol + offset] = offset * 2 < width ? startModelCol : endModelCol;
+    }
 }
 
 function modelToVisualCol(row, modelCol) {
